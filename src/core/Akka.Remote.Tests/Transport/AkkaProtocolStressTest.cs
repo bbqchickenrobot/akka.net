@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="AkkaProtocolStressTest.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Text.RegularExpressions;
 using Akka.Actor;
 using Akka.Configuration;
@@ -27,7 +34,7 @@ namespace Akka.Remote.Tests.Transport
                 akka {
                   actor.serialize-messages = off
                   actor.provider = ""Akka.Remote.RemoteActorRefProvider, Akka.Remote""
-                  remote.helios.tcp.hostname = ""localhost""
+                  remote.dot-netty.tcp.hostname = ""localhost""
                   remote.log-remote-lifecycle-events = on
 
                 ## Keep gate duration in this test for a low value otherwise too much messages are dropped
@@ -40,8 +47,8 @@ namespace Akka.Remote.Tests.Transport
                         heartbeat-interval = 1 s
                         acceptable-heartbeat-pause = 1 s
                   }
-                  remote.helios.tcp.applied-adapters = [""gremlin""]
-                  remote.helios.tcp.port = 0
+                  remote.dot-netty.tcp.applied-adapters = [""gremlin""]
+                  remote.dot-netty.tcp.port = 0
                 }");
             }
         }
@@ -64,10 +71,10 @@ namespace Akka.Remote.Tests.Transport
             private int MaxSeq = -1;
             private int Losses = 0;
 
-            private ActorRef _remote;
-            private ActorRef _controller;
+            private IActorRef _remote;
+            private IActorRef _controller;
 
-            public SequenceVerifier(ActorRef remote, ActorRef controller)
+            public SequenceVerifier(IActorRef remote, IActorRef controller)
             {
                 _remote = remote;
                 _controller = controller;
@@ -84,7 +91,7 @@ namespace Akka.Remote.Tests.Transport
                     _remote.Tell(NextSeq);
                     NextSeq++;
                     if (NextSeq%2000 == 0)
-                        Context.System.Scheduler.ScheduleOnce(TimeSpan.FromMilliseconds(500), Self, "sendNext");
+                        Context.System.Scheduler.ScheduleTellOnce(TimeSpan.FromMilliseconds(500), Self, "sendNext", Self);
                     else
                         Self.Tell("sendNext");
                 }
@@ -104,8 +111,8 @@ namespace Akka.Remote.Tests.Transport
                         if (seq > Limit*0.5)
                         {
                             _controller.Tell(Tuple.Create(MaxSeq, Losses));
-                            Context.System.Scheduler.Schedule(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), Self,
-                                ResendFinal.Instance);
+                            Context.System.Scheduler.ScheduleTellRepeatedly(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), Self,
+                                ResendFinal.Instance, Self);
                             Context.Become(Done);
                         }
                     }
@@ -139,7 +146,7 @@ namespace Akka.Remote.Tests.Transport
         }
 
         private ActorSystem systemB;
-        private ActorRef remote;
+        private IActorRef remote;
 
         private Address AddressB
         {
@@ -151,7 +158,7 @@ namespace Akka.Remote.Tests.Transport
             get { return new RootActorPath(AddressB); }
         }
 
-        private ActorRef Here
+        private IActorRef Here
         {
             get
             {
@@ -171,10 +178,12 @@ namespace Akka.Remote.Tests.Transport
 
         #region Tests
 
-        [Fact(Skip = "fails due to out-of-order processing as a result of Helios eventing")]
+        [Fact(Skip="Racy - likely due to issue with Gremlin (FailureInjector) adapter")]
         public void AkkaProtocolTransport_must_guarantee_at_most_once_delivery_and_message_ordering_despite_packet_loss()
         {
             //todo mute both systems for deadletters for any type of message
+            EventFilter.DeadLetter().Mute();
+            CreateEventFilter(systemB).DeadLetter().Mute();
             var mc =
                 RARP.For(Sys)
                     .Provider.Transport.ManagementCommand(new FailureInjectorTransportAdapter.One(AddressB,
@@ -212,3 +221,4 @@ namespace Akka.Remote.Tests.Transport
         #endregion
     }
 }
+

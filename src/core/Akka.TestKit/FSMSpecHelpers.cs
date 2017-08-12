@@ -1,11 +1,26 @@
+﻿//-----------------------------------------------------------------------
+// <copyright file="FSMSpecHelpers.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
 using Akka.Actor;
 using Akka.Util.Internal;
 
 namespace Akka.TestKit
 {
+    /// <summary>
+    /// TBD
+    /// </summary>
     public static class FSMSpecHelpers
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <typeparam name="TS">TBD</typeparam>
+        /// <returns>TBD</returns>
         public static Func<object, object, bool> CurrentStateExpector<TS>()
         {
             return (expected, actual) =>
@@ -17,6 +32,11 @@ namespace Akka.TestKit
             };
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <typeparam name="TS">TBD</typeparam>
+        /// <returns>TBD</returns>
         public static Func<object, object, bool> TransitionStateExpector<TS>()
         {
             return (expected, actual) =>

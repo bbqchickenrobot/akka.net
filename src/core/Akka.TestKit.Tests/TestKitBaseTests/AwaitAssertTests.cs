@@ -1,10 +1,17 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="AwaitAssertTests.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using Xunit;
 using Xunit.Sdk;
 
-namespace Akka.Testkit.Tests.TestKitBaseTests
+namespace Akka.TestKit.Tests.Xunit2.TestKitBaseTests
 {
-    public class AwaitAssertTests : Akka.TestKit.Xunit.TestKit
+    public class AwaitAssertTests : TestKit.Xunit2.TestKit
     {
         public AwaitAssertTests() : base("akka.test.timefactor=2")
         {
@@ -27,3 +34,4 @@ namespace Akka.Testkit.Tests.TestKitBaseTests
         }
     }
 }
+

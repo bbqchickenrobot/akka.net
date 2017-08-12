@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ActorBase.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using Akka.Actor.Internal;
 using Akka.Event;
 
@@ -15,8 +22,15 @@ namespace Akka.Actor
         /// </summary>
         public class Success : Status
         {
+            /// <summary>
+            /// TBD
+            /// </summary>
             public readonly object Status;
 
+            /// <summary>
+            /// TBD
+            /// </summary>
+            /// <param name="status">TBD</param>
             public Success(object status)
             {
                 Status = status;
@@ -29,16 +43,24 @@ namespace Akka.Actor
         /// </summary>
         public class Failure : Status
         {
+            /// <summary>
+            /// The cause of the failure
+            /// </summary>
             public readonly Exception Cause;
 
+            /// <summary>
+            /// Initializes a new instance of the <see cref="Failure"/> class.
+            /// </summary>
+            /// <param name="cause">The cause of the failure</param>
             public Failure(Exception cause)
             {
                 Cause = cause;
             }
 
+            /// <inheritdoc/>
             public override string ToString()
             {
-                return "Failure: " + Cause.ToString();
+                return $"Failure: {Cause}";
             }
         }
     }
@@ -51,24 +73,14 @@ namespace Akka.Actor
     }
 
     /// <summary>
-    /// Interface used on Actors that have an explicit requirement for a logger
-    /// </summary>
-    [Obsolete()]
-    public interface IActorLogging
-    {
-        LoggingAdapter Log { get; }
-    }
-
-    /// <summary>
     /// Contains things needed by the framework
     /// </summary>
     public interface IInternalActor
     {
         /// <summary>Gets the context for this instance.</summary>
         /// <value>The context.</value>
-        /// <exception cref="System.NotSupportedException">
-        /// There is no active Context, this is most likely due to use of async
-        /// operations from within this actor.
+        /// <exception cref="NotSupportedException">
+        /// This exception is thrown if there is no active Context. The most likely cause is due to use of async operations from within this actor.
         /// </exception>
         IActorContext ActorContext { get; }
     }
@@ -78,13 +90,15 @@ namespace Akka.Actor
     /// </summary>
     public abstract partial class ActorBase : IInternalActor
     {
-        private ActorRef _clearedSelf;
-        private bool HasBeenCleared { get { return _clearedSelf != null; } }
+        private IActorRef _clearedSelf;
+        private bool HasBeenCleared => _clearedSelf != null;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="ActorBase" /> class.
         /// </summary>
-        /// <exception cref="System.Exception">Do not create actors using 'new', always create them using an ActorContext/System</exception>
+        /// <exception cref="ActorInitializationException">
+        /// This exception is thrown when an actor is created using <c>new</c>. Always create actors using an ActorContext/System.
+        /// </exception>
         protected ActorBase()
         {
             if (ActorCell.Current == null)
@@ -96,39 +110,29 @@ namespace Akka.Actor
         ///     Gets the sending ActorRef of the current message
         /// </summary>
         /// <value>The sender ActorRef</value>
-        protected ActorRef Sender
-        {
-            get { return Context.Sender; }
-        }
+        protected IActorRef Sender => Context.Sender;
 
         /// <summary>
         ///     Gets the self ActorRef
         /// </summary>
         /// <value>Self ActorRef</value>
-        protected ActorRef Self { get { return HasBeenCleared ? _clearedSelf : Context.Self; } }
+        protected IActorRef Self => HasBeenCleared ? _clearedSelf : Context.Self;
 
         /// <summary>
         ///     Gets the context.
         /// </summary>
         /// <value>The context.</value>
-        /// <exception cref="System.NotSupportedException">
-        ///     There is no active ActorContext, this is most likely due to use of async
-        ///     operations from within this actor.
+        /// <exception cref="NotSupportedException">
+        /// This exception is thrown if there is no active ActorContext. The most likely cause is due to use of async operations from within this actor.
         /// </exception>
-        IActorContext IInternalActor.ActorContext
-        {
-            get {
-                return Context;
-            }
-        }
+        IActorContext IInternalActor.ActorContext => Context;
 
         /// <summary>
         ///     Gets the context.
         /// </summary>
         /// <value>The context.</value>
-        /// <exception cref="System.NotSupportedException">
-        ///     There is no active Context, this is most likely due to use of async
-        ///     operations from within this actor.
+        /// <exception cref="NotSupportedException">
+        /// This exception is thrown if there is no active Context. The most likely cause is due to use of async operations from within this actor.
         /// </exception>
         protected static IActorContext Context
         {
@@ -143,10 +147,16 @@ namespace Akka.Actor
             }
         }
 
-        internal protected virtual bool AroundReceive(Receive receive, object message)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="receive">TBD</param>
+        /// <param name="message">TBD</param>
+        /// <returns>TBD</returns>
+        protected internal virtual bool AroundReceive(Receive receive, object message)
         {
             var wasHandled = receive(message);
-            if(!wasHandled)
+            if (!wasHandled)
             {
                 Unhandled(message);
             }
@@ -157,6 +167,7 @@ namespace Akka.Actor
         ///     Processor for user defined messages.
         /// </summary>
         /// <param name="message">The message.</param>
+        /// <returns>TBD</returns>
         protected abstract bool Receive(object message);
 
         /// <summary>
@@ -171,10 +182,13 @@ namespace Akka.Actor
         /// to the actor's system's <see cref="EventStream"/>
         /// </summary>
         /// <param name="message">The unhandled message.</param>
+        /// <exception cref="DeathPactException">
+        /// This exception is thrown if the given <paramref name="message"/> is a <see cref="Terminated"/> message.
+        /// </exception>
         protected virtual void Unhandled(object message)
         {
             var terminatedMessage = message as Terminated;
-            if(terminatedMessage != null)
+            if (terminatedMessage != null)
             {
                 throw new DeathPactException(terminatedMessage.ActorRef);
             }
@@ -182,40 +196,50 @@ namespace Akka.Actor
         }
 
         /// <summary>
-        /// Changes the Actor's behavior to become the new <see cref="Actor.Receive"/> handler.
-        /// This method acts upon the behavior stack as follows:
-        /// <para>if <paramref name="discardOld"/>==<c>true</c> it will replace the current behavior (i.e. the top element)</para>
-        /// <para>if <paramref name="discardOld"/>==<c>false</c> it will keep the current behavior and push the given one atop</para>
-        /// The default of replacing the current behavior on the stack has been chosen to avoid memory
-        /// leaks in case client code is written without consulting this documentation first (i.e.
-        /// always pushing new behaviors and never issuing an <see cref="Unbecome"/>)
+        /// Changes the actor's command behavior and replaces the current receive handler with the specified handler.
         /// </summary>
-        /// <param name="receive">The receive delegate.</param>
-        /// <param name="discardOld">If <c>true</c> it will replace the current behavior; 
-        /// otherwise it will keep the current behavior and it can be reverted using <see cref="Unbecome"/></param>
-        protected void Become(Receive receive, bool discardOld = true)
+        /// <param name="receive">The new message handler.</param>
+        protected void Become(Receive receive)
         {
-            Context.Become(receive, discardOld);
+            Context.Become(receive);
+        }
+
+        /// <summary>
+        /// Changes the actor's behavior and replaces the current receive handler with the specified handler.
+        /// The current handler is stored on a stack, and you can revert to it by calling <see cref="IActorContext.UnbecomeStacked"/>
+        /// <remarks>Please note, that in order to not leak memory, make sure every call to <see cref="BecomeStacked"/>
+        /// is matched with a call to <see cref="IActorContext.UnbecomeStacked"/>.</remarks>
+        /// </summary>
+        /// <param name="receive">The new message handler.</param>
+        protected void BecomeStacked(Receive receive)
+        {
+            Context.BecomeStacked(receive);
         }
 
         /// <summary>
         /// Reverts the Actor behavior to the previous one on the behavior stack.
         /// </summary>
-        protected void Unbecome()
+        protected void UnbecomeStacked()
         {
-            Context.Unbecome();
+            Context.UnbecomeStacked();
         }
 
-        internal void Clear(ActorRef self)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="self">TBD</param>
+        internal void Clear(IActorRef self)
         {
             _clearedSelf = self;
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         internal void Unclear()
         {
             _clearedSelf = null;
         }
-
 
         /// <summary>
         /// <para>

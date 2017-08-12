@@ -1,4 +1,12 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="HoconTokenizer.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -6,43 +14,53 @@ using System.Text;
 namespace Akka.Configuration.Hocon
 {
     /// <summary>
-    ///     Class Tokenizer.
+    /// This class contains methods used to tokenize a string.
     /// </summary>
     public class Tokenizer
     {
-        /// <summary>
-        ///     The text
-        /// </summary>
         private readonly string _text;
-
-        /// <summary>
-        ///     The index
-        /// </summary>
         private int _index;
+        private readonly Stack<int> _indexStack = new Stack<int>();
 
         /// <summary>
-        ///     Initializes a new instance of the <see cref="Tokenizer" /> class.
+        /// Adds the current index to the tokenizer's bookkeeping stack.
         /// </summary>
-        /// <param name="text">The text.</param>
+        public void Push()
+        {
+            _indexStack.Push(_index);
+        }
+
+        /// <summary>
+        /// Removes an index from the tokenizer's bookkeeping stack. 
+        /// </summary>
+        public void Pop()
+        {
+            _index = _indexStack.Pop();
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Tokenizer"/> class.
+        /// </summary>
+        /// <param name="text">The string that contains the text to tokenize.</param>
         public Tokenizer(string text)
         {
             this._text = text;
         }
 
         /// <summary>
-        ///     Gets a value indicating whether [eof].
+        /// A value indicating whether the tokenizer has reached the end of the string.
         /// </summary>
-        /// <value><c>true</c> if [eof]; otherwise, <c>false</c>.</value>
         public bool EoF
         {
             get { return _index >= _text.Length; }
         }
 
         /// <summary>
-        ///     Matches the specified pattern.
+        /// Determines whether the given pattern matches the value at the current
+        /// position of the tokenizer.
         /// </summary>
-        /// <param name="pattern">The pattern.</param>
-        /// <returns><c>true</c> if XXXX, <c>false</c> otherwise.</returns>
+        /// <param name="pattern">The string that contains the characters to match.</param>
+        /// <returns><c>true</c> if the pattern matches, otherwise <c>false</c>.</returns>
         public bool Matches(string pattern)
         {
             if (pattern.Length + _index > _text.Length)
@@ -57,10 +75,13 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Takes the specified length.
+        /// Retrieves a string of the given length from the current position of the tokenizer.
         /// </summary>
-        /// <param name="length">The length.</param>
-        /// <returns>System.String.</returns>
+        /// <param name="length">The length of the string to return.</param>
+        /// <returns>
+        /// The string of the given length. If the length exceeds where the
+        /// current index is located, then null is returned.
+        /// </returns>
         public string Take(int length)
         {
             if (_index + length > _text.Length)
@@ -72,10 +93,11 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Matches the specified patterns.
+        /// Determines whether any of the given patterns match the value at the current
+        /// position of the tokenizer.
         /// </summary>
-        /// <param name="patterns">The patterns.</param>
-        /// <returns><c>true</c> if XXXX, <c>false</c> otherwise.</returns>
+        /// <param name="patterns">The string array that contains the characters to match.</param>
+        /// <returns><c>true</c> if any one of the patterns match, otherwise <c>false</c>.</returns>
         public bool Matches(params string[] patterns)
         {
             foreach (string pattern in patterns)
@@ -90,9 +112,9 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Peeks this instance.
+        /// Retrieves the next character in the tokenizer without advancing its position.
         /// </summary>
-        /// <returns>System.Char.</returns>
+        /// <returns>The character at the tokenizer's current position.</returns>
         public char Peek()
         {
             if (EoF)
@@ -102,9 +124,9 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Takes this instance.
+        /// Retrieves the next character in the tokenizer.
         /// </summary>
-        /// <returns>System.Char.</returns>
+        /// <returns>The character at the tokenizer's current position.</returns>
         public char Take()
         {
             if (EoF)
@@ -114,7 +136,7 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the whitespace.
+        /// Advances the tokenizer to the next non-whitespace character.
         /// </summary>
         public void PullWhitespace()
         {
@@ -127,31 +149,25 @@ namespace Akka.Configuration.Hocon
 
 
     /// <summary>
-    ///     Class HoconTokenizer.
+    /// This class contains methods used to tokenize HOCON (Human-Optimized Config Object Notation)
+    /// configuration strings.
     /// </summary>
     public class HoconTokenizer : Tokenizer
     {
-        /// <summary>
-        ///     The not in unquoted key
-        /// </summary>
         private const string NotInUnquotedKey = "$\"{}[]:=,#`^?!@*&\\.";
-
-        /// <summary>
-        ///     The not in unquoted text
-        /// </summary>
         private const string NotInUnquotedText = "$\"{}[]:=,#`^?!@*&\\";
 
         /// <summary>
-        ///     Initializes a new instance of the <see cref="HoconTokenizer" /> class.
+        /// Initializes a new instance of the <see cref="HoconTokenizer"/> class.
         /// </summary>
-        /// <param name="text">The text.</param>
+        /// <param name="text">The string that contains the text to tokenize.</param>
         public HoconTokenizer(string text)
             : base(text)
         {
         }
 
         /// <summary>
-        ///     Pulls the whitespace and comments.
+        /// Advances the tokenizer to the next non-whitespace, non-comment token.
         /// </summary>
         public void PullWhitespaceAndComments()
         {
@@ -166,9 +182,10 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the rest of line.
+        /// Retrieves the current line from where the current token
+        /// is located in the string.
         /// </summary>
-        /// <returns>System.String.</returns>
+        /// <returns>The current line from where the current token is located.</returns>
         public string PullRestOfLine()
         {
             var sb = new StringBuilder();
@@ -188,10 +205,10 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the next.
+        /// Retrieves the next token from the string.
         /// </summary>
-        /// <returns>Token.</returns>
-        /// <exception cref="System.Exception">unknown token</exception>
+        /// <exception cref="FormatException">This exception is thrown if an unknown token or escape code is encountered.</exception>
+        /// <returns>The next token contained in the string.</returns>
         public Token PullNext()
         {
             PullWhitespaceAndComments();
@@ -210,6 +227,10 @@ namespace Akka.Configuration.Hocon
             if (IsAssignment())
             {
                 return PullAssignment();
+            }
+            if (IsInclude())
+            {
+                return PullInclude();
             }
             if (IsStartOfQuotedKey())
             {
@@ -231,22 +252,18 @@ namespace Akka.Configuration.Hocon
             {
                 return new Token(TokenType.EoF);
             }
-            throw new Exception("unknown token");
+            throw new FormatException("unknown token");
         }
 
-        /// <summary>
-        ///     Determines whether [is start of quoted key].
-        /// </summary>
-        /// <returns><c>true</c> if [is start of quoted key]; otherwise, <c>false</c>.</returns>
         private bool IsStartOfQuotedKey()
         {
             return Matches("\"");
         }
 
         /// <summary>
-        ///     Pulls the array end.
+        /// Retrieves a <see cref="TokenType.ArrayEnd"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A <see cref="TokenType.ArrayEnd"/> token from the tokenizer's current position.</returns>
         public Token PullArrayEnd()
         {
             Take();
@@ -254,27 +271,27 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Determines whether [is array end].
+        /// Determines whether the current token matches an <see cref="TokenType.ArrayEnd"/> token.
         /// </summary>
-        /// <returns><c>true</c> if [is array end]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if the token matches; otherwise, <c>false</c>.</returns>
         public bool IsArrayEnd()
         {
             return Matches("]");
         }
 
         /// <summary>
-        ///     Determines whether [is array start].
+        /// Determines whether the current token matches an <see cref="TokenType.ArrayStart"/> token.
         /// </summary>
-        /// <returns><c>true</c> if [is array start]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if the token matches; otherwise, <c>false</c>.</returns>
         public bool IsArrayStart()
         {
             return Matches("[");
         }
 
         /// <summary>
-        ///     Pulls the array start.
+        /// Retrieves a <see cref="TokenType.ArrayStart"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A <see cref="TokenType.ArrayStart"/> token from the tokenizer's current position.</returns>
         public Token PullArrayStart()
         {
             Take();
@@ -282,9 +299,9 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the dot.
+        /// Retrieves a <see cref="TokenType.Dot"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A <see cref="TokenType.Dot"/> token from the tokenizer's current position.</returns>
         public Token PullDot()
         {
             Take();
@@ -292,9 +309,9 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the comma.
+        /// Retrieves a <see cref="TokenType.Comma"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A <see cref="TokenType.Comma"/> token from the tokenizer's current position.</returns>
         public Token PullComma()
         {
             Take();
@@ -302,9 +319,9 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the start of object.
+        /// Retrieves a <see cref="TokenType.ObjectStart"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A <see cref="TokenType.ObjectStart"/> token from the tokenizer's current position.</returns>
         public Token PullStartOfObject()
         {
             Take();
@@ -312,9 +329,9 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the end of object.
+        /// Retrieves a <see cref="TokenType.ObjectEnd"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A <see cref="TokenType.ObjectEnd"/> token from the tokenizer's current position.</returns>
         public Token PullEndOfObject()
         {
             Take();
@@ -322,9 +339,9 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the assignment.
+        /// Retrieves a <see cref="TokenType.Assign"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A <see cref="TokenType.Assign"/> token from the tokenizer's current position.</returns>
         public Token PullAssignment()
         {
             Take();
@@ -332,72 +349,72 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Determines whether this instance is comma.
+        /// Determines whether the current token matches an <see cref="TokenType.Comma"/> token.
         /// </summary>
-        /// <returns><c>true</c> if this instance is comma; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if the token matches; otherwise, <c>false</c>.</returns>
         public bool IsComma()
         {
             return Matches(",");
         }
 
         /// <summary>
-        ///     Determines whether this instance is dot.
+        /// Determines whether the current token matches an <see cref="TokenType.Dot"/> token.
         /// </summary>
-        /// <returns><c>true</c> if this instance is dot; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if the token matches; otherwise, <c>false</c>.</returns>
         public bool IsDot()
         {
             return Matches(".");
         }
 
         /// <summary>
-        ///     Determines whether [is object start].
+        /// Determines whether the current token matches an <see cref="TokenType.ObjectStart"/> token.
         /// </summary>
-        /// <returns><c>true</c> if [is object start]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if the token matches; otherwise, <c>false</c>.</returns>
         public bool IsObjectStart()
         {
             return Matches("{");
         }
 
         /// <summary>
-        ///     Determines whether [is end of object].
+        /// Determines whether the current token matches an <see cref="TokenType.ObjectEnd"/> token.
         /// </summary>
-        /// <returns><c>true</c> if [is end of object]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if the token matches; otherwise, <c>false</c>.</returns>
         public bool IsEndOfObject()
         {
             return Matches("}");
         }
 
         /// <summary>
-        ///     Determines whether this instance is assignment.
+        /// Determines whether the current token matches an <see cref="TokenType.Assign"/> token.
         /// </summary>
-        /// <returns><c>true</c> if this instance is assignment; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if the token matches; otherwise, <c>false</c>.</returns>
         public bool IsAssignment()
         {
             return Matches("=", ":");
         }
 
         /// <summary>
-        ///     Determines whether [is start of quoted text].
+        /// Determines whether the current token matches the start of a quoted string.
         /// </summary>
-        /// <returns><c>true</c> if [is start of quoted text]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if token matches; otherwise, <c>false</c>.</returns>
         public bool IsStartOfQuotedText()
         {
             return Matches("\"");
         }
 
         /// <summary>
-        ///     Determines whether [is start of triple quoted text].
+        /// Determines whether the current token matches the start of a triple quoted string.
         /// </summary>
-        /// <returns><c>true</c> if [is start of triple quoted text]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if token matches; otherwise, <c>false</c>.</returns>
         public bool IsStartOfTripleQuotedText()
         {
             return Matches("\"\"\"");
         }
 
         /// <summary>
-        ///     Pulls the comment.
+        /// Retrieves a <see cref="TokenType.Comment"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A <see cref="TokenType.Comment"/> token from the tokenizer's current position.</returns>
         public Token PullComment()
         {
             PullRestOfLine();
@@ -405,9 +422,9 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the unquoted key.
+        /// Retrieves an unquoted <see cref="TokenType.Key"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A <see cref="TokenType.Key"/> token from the tokenizer's current position.</returns>
         public Token PullUnquotedKey()
         {
             var sb = new StringBuilder();
@@ -420,60 +437,63 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Determines whether [is unquoted key].
+        /// Determines whether the current token is an unquoted key.
         /// </summary>
-        /// <returns><c>true</c> if [is unquoted key]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if token is an unquoted key; otherwise, <c>false</c>.</returns>
         public bool IsUnquotedKey()
         {
             return (!EoF && !IsStartOfComment() && !NotInUnquotedKey.Contains(Peek()));
         }
 
         /// <summary>
-        ///     Determines whether [is unquoted key start].
+        /// Determines whether the current token is the start of an unquoted key.
         /// </summary>
-        /// <returns><c>true</c> if [is unquoted key start]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if token is the start of an unquoted key; otherwise, <c>false</c>.</returns>
         public bool IsUnquotedKeyStart()
         {
             return (!EoF && !IsWhitespace() && !IsStartOfComment() && !NotInUnquotedKey.Contains(Peek()));
         }
 
         /// <summary>
-        ///     Determines whether this instance is whitespace.
+        /// Determines whether the current token is whitespace.
         /// </summary>
-        /// <returns><c>true</c> if this instance is whitespace; otherwise, <c>false</c>.</returns>
-        private bool IsWhitespace()
+        /// <returns><c>true</c> if token is whitespace; otherwise, <c>false</c>.</returns>
+        public bool IsWhitespace()
         {
             return char.IsWhiteSpace(Peek());
         }
 
         /// <summary>
-        ///     Pulls the triple quoted text.
+        /// Determines whether the current token is whitespace or a comment.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns><c>true</c> if token is whitespace or a comment; otherwise, <c>false</c>.</returns>
+        public bool IsWhitespaceOrComment()
+        {
+            return IsWhitespace() || IsStartOfComment();
+        }
+
+        /// <summary>
+        /// Retrieves a triple quoted <see cref="TokenType.LiteralValue"/> token from the tokenizer's current position.
+        /// </summary>
+        /// <returns>A <see cref="TokenType.LiteralValue"/> token from the tokenizer's current position.</returns>
         public Token PullTripleQuotedText()
         {
             var sb = new StringBuilder();
             Take(3);
             while (!EoF && !Matches("\"\"\""))
             {
-                if (Matches("\\"))
-                {
-                    sb.Append(PullEscapeSequence());
-                }
-                else
-                {
-                    sb.Append(Peek());
-                    Take();
-                }
+                sb.Append(Peek());
+                Take();
             }
             Take(3);
             return Token.LiteralValue(sb.ToString());
         }
 
         /// <summary>
-        ///     Pulls the quoted text.
+        /// Retrieves a quoted <see cref="TokenType.LiteralValue"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <exception cref="FormatException">This exception is thrown if an unknown escape code is encountered.</exception>
+        /// <returns>A <see cref="TokenType.LiteralValue"/> token from the tokenizer's current position.</returns>
         public Token PullQuotedText()
         {
             var sb = new StringBuilder();
@@ -495,9 +515,10 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the quoted key.
+        /// Retrieves a quoted <see cref="TokenType.Key"/> token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <exception cref="FormatException">This exception is thrown if an unknown escape code is encountered.</exception>
+        /// <returns>A <see cref="TokenType.Key"/> token from the tokenizer's current position.</returns>
         public Token PullQuotedKey()
         {
             var sb = new StringBuilder();
@@ -519,10 +540,19 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the escape sequence.
+        /// TBD
         /// </summary>
-        /// <returns>System.String.</returns>
-        /// <exception cref="System.NotSupportedException"></exception>
+        /// <exception cref="FormatException">This exception is thrown if an unknown escape code is encountered.</exception>
+        /// <returns>TBD</returns>
+        public Token PullInclude()
+        {
+            Take("include".Length);
+            PullWhitespaceAndComments();
+            var rest = PullQuotedText();
+            var unQuote = rest.Value;
+            return Token.Include(unQuote);
+        }
+
         private string PullEscapeSequence()
         {
             Take(); //consume "\"
@@ -548,28 +578,28 @@ namespace Akka.Configuration.Hocon
                 case 'u':
                     string hex = "0x" + Take(4);
                     int j = Convert.ToInt32(hex, 16);
-                    return ((char) j).ToString(CultureInfo.InvariantCulture);
+                    return ((char) j).ToString();
                 default:
-                    throw new NotSupportedException(string.Format("Unknown escape code: {0}", escaped));
+                    throw new FormatException($"Unknown escape code: {escaped}");
             }
         }
 
         /// <summary>
-        ///     Determines whether [is start of comment].
+        /// Determines whether the current token is the start of a comment.
         /// </summary>
-        /// <returns><c>true</c> if [is start of comment]; otherwise, <c>false</c>.</returns>
-        private bool IsStartOfComment()
+        /// <returns><c>true</c> if token is the start of a comment; otherwise, <c>false</c>.</returns>
+        public bool IsStartOfComment()
         {
             return (Matches("#", "//"));
         }
 
         /// <summary>
-        ///     Pulls the value.
+        /// Retrieves a value token from the tokenizer's current position.
         /// </summary>
-        /// <returns>Token.</returns>
-        /// <exception cref="System.Exception">
-        ///     Expected value: Null literal, Array, Number, Boolean, Quoted Text, Unquoted Text,
-        ///     Triple quoted Text, Object or End of array
+        /// <returns>A value token from the tokenizer's current position.</returns>
+        /// <exception cref="FormatException">
+        /// This exception is thrown if an unknown token is encountered. Expected values include the following:
+        /// Null literal, Array, Quoted Text, Unquoted Text, Triple quoted Text, Object or End of array.
         /// </exception>
         public Token PullValue()
         {
@@ -605,23 +635,56 @@ namespace Akka.Configuration.Hocon
                 return PullSubstitution();
             }
 
-            throw new Exception(
-                "Expected value: Null literal, Array, Number, Boolean, Quoted Text, Unquoted Text, Tripple quoted Text, Object or End of array");
+            throw new FormatException(
+                "Expected value: Null literal, Array, Quoted Text, Unquoted Text, Triple quoted Text, Object or End of array");
         }
 
         /// <summary>
-        ///     Determines whether [is substitution start].
+        /// Determines whether the current token is the start of a substitution.
         /// </summary>
-        /// <returns><c>true</c> if [is substitution start]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if token is the start of a substitution; otherwise, <c>false</c>.</returns>
         public bool IsSubstitutionStart()
         {
             return Matches("${");
         }
 
         /// <summary>
-        ///     Pulls the substitution.
+        /// Determines whether the current token is the start of an include directive.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <exception cref="FormatException">This exception is thrown if an unknown escape code is encountered.</exception>
+        /// <returns><c>true</c> if token is the start of an include directive; otherwise, <c>false</c>.</returns>
+        public bool IsInclude()
+        {
+            Push();
+            try
+            {
+                if (Matches("include"))
+                {
+                    Take("include".Length);
+
+                    if (IsWhitespaceOrComment())
+                    {
+                        PullWhitespaceAndComments();
+
+                        if (IsStartOfQuotedText())
+                        {
+                            PullQuotedText();
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            finally
+            {
+                Pop();
+            }
+        }
+
+        /// <summary>
+        /// Retrieves a <see cref="TokenType.Substitute"/> token from the tokenizer's current position.
+        /// </summary>
+        /// <returns>A <see cref="TokenType.Substitute"/> token from the tokenizer's current position.</returns>
         public Token PullSubstitution()
         {
             var sb = new StringBuilder();
@@ -634,30 +697,19 @@ namespace Akka.Configuration.Hocon
             return Token.Substitution(sb.ToString());
         }
 
-        //public Token PullNextTrailingValue()
-        //{
-        //    PullSpaceOrTab();
-
-        //}
-
         /// <summary>
-        ///     Determines whether [is space or tab].
+        /// Determines whether the current token is a space or a tab.
         /// </summary>
-        /// <returns><c>true</c> if [is space or tab]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if token is the start of a space or a tab; otherwise, <c>false</c>.</returns>
         public bool IsSpaceOrTab()
         {
             return Matches(" ", "\t");
         }
 
-        //private bool IsStartNumber()
-        //{
-        //    return Matches("-", "+") || char.IsDigit(Peek());
-        // }
-
         /// <summary>
-        ///     Determines whether [is start simple value].
+        /// Determines whether the current token is the start of an unquoted string literal.
         /// </summary>
-        /// <returns><c>true</c> if [is start simple value]; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if token is the start of an unquoted string literal; otherwise, <c>false</c>.</returns>
         public bool IsStartSimpleValue()
         {
             if (IsSpaceOrTab())
@@ -670,9 +722,9 @@ namespace Akka.Configuration.Hocon
         }
 
         /// <summary>
-        ///     Pulls the space or tab.
+        /// Retrieves the current token, including whitespace and tabs, as a string literal token.
         /// </summary>
-        /// <returns>Token.</returns>
+        /// <returns>A token that contains the string literal value.</returns>
         public Token PullSpaceOrTab()
         {
             var sb = new StringBuilder();
@@ -683,10 +735,6 @@ namespace Akka.Configuration.Hocon
             return Token.LiteralValue(sb.ToString());
         }
 
-        /// <summary>
-        ///     Pulls the unquoted text.
-        /// </summary>
-        /// <returns>Token.</returns>
         private Token PullUnquotedText()
         {
             var sb = new StringBuilder();
@@ -695,23 +743,29 @@ namespace Akka.Configuration.Hocon
                 sb.Append(Take());
             }
 
+            // Unquoted text does not support assignment character.
+            if (IsAssignment())
+                throw new ConfigurationException(
+                    @"Could not parse an unquoted text value containing assignment character '=' or ':'.
+- If you want to declare a new object, please enclose the item with curly brackets.
+- If you want to declare a URI address, please enclose the item with double quotes."
+                );
+
             return Token.LiteralValue(sb.ToString());
         }
 
-        /// <summary>
-        ///     Determines whether [is unquoted text].
-        /// </summary>
-        /// <returns><c>true</c> if [is unquoted text]; otherwise, <c>false</c>.</returns>
         private bool IsUnquotedText()
         {
             return (!EoF && !IsWhitespace() && !IsStartOfComment() && !NotInUnquotedText.Contains(Peek()));
         }
 
         /// <summary>
-        ///     Pulls the simple value.
+        /// Retrieves the current token as a string literal token.
         /// </summary>
-        /// <returns>Token.</returns>
-        /// <exception cref="System.Exception">No simple value found</exception>
+        /// <exception cref="FormatException">
+        /// This exception is thrown if the tokenizer cannot find a string literal value from the current token.
+        /// </exception>
+        /// <returns>A token that contains the string literal value.</returns>
         public Token PullSimpleValue()
         {
             if (IsSpaceOrTab())
@@ -719,13 +773,13 @@ namespace Akka.Configuration.Hocon
             if (IsUnquotedText())
                 return PullUnquotedText();
 
-            throw new Exception("No simple value found");
+            throw new FormatException("No simple value found");
         }
 
         /// <summary>
-        ///     Determines whether this instance is value.
+        /// Determines whether the current token is a value.
         /// </summary>
-        /// <returns><c>true</c> if this instance is value; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if the current token is a value; otherwise, <c>false</c>.</returns>
         internal bool IsValue()
         {
             if (IsArrayStart())

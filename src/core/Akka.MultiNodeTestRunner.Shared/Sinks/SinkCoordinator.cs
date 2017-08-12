@@ -1,4 +1,10 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="SinkCoordinator.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -120,7 +126,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
 
                 //Shut down the ActorSystem if all confirmations have been received
                 if (ReceivedSinkCloseConfirmations >= TotalReceiveClosedConfirmations)
-                    Context.System.Shutdown();
+                    Context.System.Terminate();
             });
 
             Receive<RecommendedExitCode>(code =>
@@ -141,7 +147,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
                     sink.RequestExitCode(Self);
                     sink.Close(Context.System)
                         .ContinueWith(r => new SinkClosed(),
-                        TaskContinuationOptions.ExecuteSynchronously & TaskContinuationOptions.AttachedToParent)
+                        TaskContinuationOptions.ExecuteSynchronously)
                         .PipeTo(Self);
                 }
             });
@@ -151,21 +157,21 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
             });
             Receive<NodeCompletedSpecWithSuccess>(s => PublishToChildren(s));
             Receive<IList<NodeTest>>(tests => BeginSpec(tests));
-            Receive<EndSpec>(spec => EndSpec());
+            Receive<EndSpec>(spec => EndSpec(spec.ClassName, spec.MethodName));
             Receive<RunnerMessage>(runner => PublishToChildren(runner));
         }
 
         private void PublishToChildren(NodeCompletedSpecWithSuccess message)
         {
             foreach(var sink in Sinks)
-                sink.Success(message.NodeIndex, message.Message);
+                sink.Success(message.NodeIndex, message.NodeRole, message.Message);
         }
 
 
-        private void EndSpec()
+        private void EndSpec(string testName, string methodName)
         {
             foreach (var sink in Sinks)
-                sink.EndTest();
+                sink.EndTest(testName, methodName);
         }
 
         private void BeginSpec(IList<NodeTest> tests)
@@ -179,7 +185,13 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
         private void PublishToChildren(RunnerMessage message)
         {
             foreach (var sink in Sinks)
+            {
+#if CORECLR
+                sink.LogRunnerMessage(message.Message, Assembly.GetEntryAssembly().GetName().Name, LogLevel.InfoLevel);
+#else
                 sink.LogRunnerMessage(message.Message, Assembly.GetExecutingAssembly().GetName().Name, LogLevel.InfoLevel);
+#endif
+            }
         }
 
         /// <summary>
@@ -194,3 +206,4 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
         #endregion
     }
 }
+

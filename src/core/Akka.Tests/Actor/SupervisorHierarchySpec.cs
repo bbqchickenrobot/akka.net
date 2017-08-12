@@ -1,8 +1,14 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="SupervisorHierarchySpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Threading;
 using Akka.Actor;
 using Akka.Actor.Dsl;
-using Akka.Dispatch.SysMsg;
 using Akka.TestKit;
 using Akka.TestKit.TestActors;
 using Akka.Tests.TestUtils;
@@ -59,6 +65,22 @@ namespace Akka.Tests.Actor
             }
         }
 
+        private class ResumerAsync : TestReceiveActor
+        {
+            public ResumerAsync()
+            {
+                ReceiveAsync<string>(s => s.StartsWith("spawn:"), async s => Sender.Tell(Context.ActorOf<ResumerAsync>(s.Substring(6))));
+                ReceiveAsync<string>(s => s.Equals("spawn"), async _ => Sender.Tell(Context.ActorOf<ResumerAsync>()));
+                ReceiveAsync<string>(s => s.Equals("fail"), async _ => { throw new Exception("expected"); });
+                ReceiveAsync<string>(s => s.Equals("ping"), async _ => Sender.Tell("pong"));
+            }
+
+            protected override SupervisorStrategy SupervisorStrategy()
+            {
+                return new OneForOneStrategy(_ => Directive.Resume);
+            }
+        }
+
         private class Failure : Exception
         {
             public Directive Directive { get; set; }
@@ -82,7 +104,6 @@ namespace Akka.Tests.Actor
             }
         }
 
-
         public SupervisorHierarchySpec()
             : base(FullDebugConfig)
         {
@@ -98,12 +119,12 @@ namespace Akka.Tests.Actor
 
             Func<Exception, Directive> decider = _ => { return Directive.Escalate; };
             var managerProps = new PropsWithName(Props.Create(() => new CountDownActor(countDown, new AllForOneStrategy(decider))), "manager");
-            var manager = boss.Ask<ActorRef>(managerProps, TestKitSettings.DefaultTimeout).Result;
+            var manager = boss.Ask<IActorRef>(managerProps, TestKitSettings.DefaultTimeout).Result;
 
             var workerProps = Props.Create(() => new CountDownActor(countDown, SupervisorStrategy.DefaultStrategy));
-            var worker1 = manager.Ask<ActorRef>(new PropsWithName(workerProps, "worker1"), TestKitSettings.DefaultTimeout).Result;
-            var worker2 = manager.Ask<ActorRef>(new PropsWithName(workerProps, "worker2"), TestKitSettings.DefaultTimeout).Result;
-            var worker3 = manager.Ask<ActorRef>(new PropsWithName(workerProps, "worker3"), TestKitSettings.DefaultTimeout).Result;
+            var worker1 = manager.Ask<IActorRef>(new PropsWithName(workerProps, "worker1"), TestKitSettings.DefaultTimeout).Result;
+            var worker2 = manager.Ask<IActorRef>(new PropsWithName(workerProps, "worker2"), TestKitSettings.DefaultTimeout).Result;
+            var worker3 = manager.Ask<IActorRef>(new PropsWithName(workerProps, "worker3"), TestKitSettings.DefaultTimeout).Result;
 
             EventFilter.Exception<ActorKilledException>().ExpectOne(() =>
             {
@@ -131,7 +152,7 @@ namespace Akka.Tests.Actor
                 ctx.Watch(crasher);
             }, "boss");
 
-            //We have built this hiearchy:
+            //We have built this hierarchy:
             //     boss
             //      |
             //    crasher
@@ -140,7 +161,7 @@ namespace Akka.Tests.Actor
             //Crasher will be restarted, and during PostRestart countDownMessages will count down.
             //We then send another "killCrasher", which again will send Kill to crasher. It crashes,
             //decider says it should be restarted but since we specified maximum 1 restart/5seconds it will be 
-            //permantely stopped. Boss, which watches crasher, recieves Terminated, and counts down countDownMax
+            //permanently stopped. Boss, which watches crasher, receives Terminated, and counts down countDownMax
             EventFilter.Exception<ActorKilledException>().Expect(2, () =>
             {
                 boss.Tell("killCrasher");
@@ -150,20 +171,21 @@ namespace Akka.Tests.Actor
             countDownMax.Wait(TimeSpan.FromSeconds(2)).ShouldBeTrue();
         }
 
-        [Fact]
-        public void A_supervisor_hierarchy_must_resume_children_after_Resume()
+        private void Helper_A_supervisor_hierarchy_must_resume_children_after_Resume<T>() 
+            where T : ActorBase, new()
         {
-            //Build this hiearchy:
+            //Build this hierarchy:
             //     boss
             //      |
             //    middle
             //      |
             //    worker
-            var boss = ActorOf<Resumer>("resumer");
+            var name = typeof(T).Name;
+            var boss = ActorOf<T>(name);
             boss.Tell("spawn:middle");
-            var middle = ExpectMsg<ActorRef>();
+            var middle = ExpectMsg<IActorRef>();
             middle.Tell("spawn:worker");
-            var worker = ExpectMsg<ActorRef>();
+            var worker = ExpectMsg<IActorRef>();
 
             //Check everything is in place by sending ping to worker and expect it to respond with pong
             worker.Tell("ping");
@@ -180,8 +202,15 @@ namespace Akka.Tests.Actor
             //verify worker (child to middle) is up
             worker.Tell("ping");
             ExpectMsg("pong");
-
         }
+
+        [Fact]
+        public void A_supervisor_hierarchy_must_resume_children_after_Resume()
+        {
+            Helper_A_supervisor_hierarchy_must_resume_children_after_Resume<Resumer>();
+            Helper_A_supervisor_hierarchy_must_resume_children_after_Resume<ResumerAsync>();
+        }
+
         [Fact]
         public void A_supervisor_hierarchy_must_suspend_children_while_failing()
         {
@@ -193,7 +222,7 @@ namespace Akka.Tests.Actor
                 c.Receive("spawn", (s, ctx) => ctx.Sender.Tell(ctx.ActorOf<Resumer>()));
             }, "slowResumer");
 
-            //Build this hiearchy:
+            //Build this hierarchy:
             //  slowResumer
             //      |
             //     boss
@@ -202,11 +231,11 @@ namespace Akka.Tests.Actor
             //      |
             //    worker
             slowResumer.Tell("spawn:boss");
-            var boss = ExpectMsg<ActorRef>();
+            var boss = ExpectMsg<IActorRef>();
             boss.Tell("spawn:middle");
-            var middle = ExpectMsg<ActorRef>();
+            var middle = ExpectMsg<IActorRef>();
             middle.Tell("spawn:worker");
-            var worker = ExpectMsg<ActorRef>();
+            var worker = ExpectMsg<IActorRef>();
 
             //Check everything is in place by sending ping to worker and expect it to respond with pong
             worker.Tell("ping");
@@ -215,7 +244,7 @@ namespace Akka.Tests.Actor
             {
                 //Let boss crash, this means any child under boss should be suspended, so we wait for worker to become suspended.                
                 boss.Tell("fail");
-                AwaitCondition(() => ((LocalActorRef)worker).Cell.Mailbox.IsSuspended);
+                AwaitCondition(() => ((LocalActorRef)worker).Cell.Mailbox.IsSuspended());
 
                 //At this time slowresumer is currently handling the failure, in supervisestrategy, waiting for latch to be opened
                 //We verify that no message is handled by worker, by sending it a ping
@@ -228,7 +257,7 @@ namespace Akka.Tests.Actor
             });
 
             //Check that all children, and especially worker is resumed. It should receive the ping and respond with a pong
-            ExpectMsg("pong");
+            ExpectMsg("pong", TimeSpan.FromMinutes(10));
         }
 
         [Fact]
@@ -257,7 +286,7 @@ namespace Akka.Tests.Actor
                         {
                             var ca = createAttempt.IncrementAndGet();
                             if (ca <= 6 && ca % 3 == 0)
-                                childContext.ActorOf(BlackHoleActor.Props, "workingChild");
+                                childContext.ActorOf(BlackHoleActor.Props, "workingChild" + ca);
                             if (ca < 6)
                                 throw new InvalidOperationException("OH NO!");
                             childDsl.OnPreStart = _ => preStartCalled.IncrementAndGet();
@@ -276,6 +305,6 @@ namespace Akka.Tests.Actor
             preStartCalled.Current.ShouldBe(1);
             postRestartCalled.Current.ShouldBe(0);
         }
-
     }
 }
+

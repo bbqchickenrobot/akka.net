@@ -1,15 +1,15 @@
-﻿using ChatMessages;
-using Akka;
+﻿//-----------------------------------------------------------------------
+// <copyright file="Program.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
+using System.Linq;
 using Akka.Actor;
 using Akka.Configuration;
-using Akka.Remote;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+using ChatMessages;
 
 namespace ChatClient
 {
@@ -17,14 +17,23 @@ namespace ChatClient
     {
         static void Main(string[] args)
         {
-            var fluentConfig = FluentConfig.Begin()
-                                .StartRemotingOn("localhost") //no port given = use any free port
-                                .Build();
+            var config = ConfigurationFactory.ParseString(@"
+akka {  
+    actor {
+        provider = ""Akka.Remote.RemoteActorRefProvider, Akka.Remote""
+    }
+    remote {
+        dot-netty.tcp {
+		    port = 0
+		    hostname = localhost
+        }
+    }
+}
+");
 
-            using (var system = ActorSystem.Create("MyClient", fluentConfig)) 
+            using (var system = ActorSystem.Create("MyClient", config)) 
             {
                 var chatClient = system.ActorOf(Props.Create<ChatClientActor>());
-                system.ActorSelection("akka.tcp://MyServer@localhost:8081/user/ChatServer");
                 chatClient.Tell(new ConnectRequest()
                 {
                     Username = "Roggan",
@@ -45,7 +54,12 @@ namespace ChatClient
                             {
                                 NewUsername = rest
                             });
-                        }                        
+                        }
+                        if (cmd == "/exit")
+                        {
+                            Console.WriteLine("exiting");
+                            break;
+                        }
                     }
                     else
                     {
@@ -55,6 +69,8 @@ namespace ChatClient
                         });
                     }
                 }
+
+                system.Terminate().Wait();
             }
         }
     }
@@ -104,6 +120,12 @@ namespace ChatClient
         {
             message.Username = this._nick;
             _server.Tell(message);
-        }     
+        }
+
+        public void Handle(Terminated message)
+        {
+            Console.Write("Server died");
+        }
     }
 }
+

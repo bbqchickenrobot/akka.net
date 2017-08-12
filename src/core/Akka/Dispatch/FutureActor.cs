@@ -1,6 +1,12 @@
-﻿using System.Threading.Tasks;
+﻿//-----------------------------------------------------------------------
+// <copyright file="FutureActor.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System.Threading.Tasks;
 using Akka.Actor;
-using Akka.Dispatch.SysMsg;
 
 namespace Akka.Dispatch
 {
@@ -9,7 +15,7 @@ namespace Akka.Dispatch
     /// </summary>
     public class FutureActor : ActorBase
     {
-        private ActorRef respondTo;
+        private IActorRef respondTo;
         private TaskCompletionSource<object> result;
 
         /// <summary>
@@ -24,21 +30,22 @@ namespace Akka.Dispatch
         /// </summary>
         /// <param name="completionSource">The completion source.</param>
         /// <param name="respondTo">The respond to.</param>
-        public FutureActor(TaskCompletionSource<object> completionSource, ActorRef respondTo)
+        public FutureActor(TaskCompletionSource<object> completionSource, IActorRef respondTo)
         {
             result = completionSource;
-            this.respondTo = respondTo ?? ActorRef.NoSender;
+            this.respondTo = respondTo ?? ActorRefs.NoSender;
         }
 
         /// <summary>
         ///     Processor for user defined messages.
         /// </summary>
         /// <param name="message">The message.</param>
+        /// <returns>TBD</returns>
         protected override bool Receive(object message)
         {
             //if there is no listening actor asking,
             //just eval the result directly
-            ((InternalActorRef)Self).Stop();
+            ((IInternalActorRef)Self).Stop();
             Become(EmptyReceive);
 
             result.SetResult(message);
@@ -47,3 +54,4 @@ namespace Akka.Dispatch
         }
     }
 }
+

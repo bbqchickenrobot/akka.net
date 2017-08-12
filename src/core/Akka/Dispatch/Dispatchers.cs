@@ -1,183 +1,237 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="Dispatchers.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Concurrent;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Configuration;
+using Helios.Concurrency;
 
 namespace Akka.Dispatch
 {
-    public enum DispatcherType
-    {
-        Dispatcher,
-        TaskDispatcher,
-        PinnedDispatcher,
-        SynchronizedDispatcher,
-    }
-    public static class DispatcherTypeMembers
-    {
-        public static string GetName(this DispatcherType self)
-        {
-            //TODO: switch case return string?
-            return self.ToString();
-        }
-    }
     /// <summary>
-    ///     Class MessageDispatcher.
+    /// INTERNAL API
     /// </summary>
-    public abstract class MessageDispatcher
+    internal abstract class ThreadPoolExecutorService : ExecutorService
     {
+        // cache the delegate used for execution to prevent allocations		
         /// <summary>
-        ///     The default throughput
+        /// TBD
         /// </summary>
-        public const int DefaultThroughput = 100;
+        protected static readonly WaitCallback Executor = t => { ((IRunnable)t).Run(); };
 
         /// <summary>
-        ///     Initializes a new instance of the <see cref="MessageDispatcher" /> class.
+        /// TBD
         /// </summary>
-        protected MessageDispatcher()
+        public override void Shutdown()
         {
-            Throughput = DefaultThroughput;
+            // do nothing. No cleanup required.
         }
 
         /// <summary>
-        ///     Gets or sets the throughput deadline time.
+        /// TBD
         /// </summary>
-        /// <value>The throughput deadline time.</value>
-        public long? ThroughputDeadlineTime { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the throughput.
-        /// </summary>
-        /// <value>The throughput.</value>
-        public int Throughput { get; set; }
-
-        /// <summary>
-        ///     Schedules the specified run.
-        /// </summary>
-        /// <param name="run">The run.</param>
-        public abstract void Schedule(Action run);
-
-        public virtual void Dispatch(ActorCell cell, Envelope envelope)
+        /// <param name="id">TBD</param>
+        protected ThreadPoolExecutorService(string id) : base(id)
         {
-            cell.Invoke(envelope);
-        }
-
-        public virtual void SystemDispatch(ActorCell cell, Envelope envelope)
-        {
-            cell.SystemInvoke(envelope);
         }
     }
+
+#if UNSAFE_THREADING
+    /// <summary>
+    /// INTERNAL API
+    /// </summary>
+    internal sealed class FullThreadPoolExecutorServiceImpl : ThreadPoolExecutorService
+    {
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="run">TBD</param>
+        public override void Execute(IRunnable run)
+        {
+            ThreadPool.UnsafeQueueUserWorkItem(Executor, run);
+        }
+
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="id">TBD</param>
+        public FullThreadPoolExecutorServiceImpl(string id) : base(id)
+        {
+        }
+    }
+#endif
 
     /// <summary>
-    ///     Class ThreadPoolDispatcher.
+    /// INTERNAL API
     /// </summary>
-    public class ThreadPoolDispatcher : MessageDispatcher
+    internal sealed class PartialTrustThreadPoolExecutorService : ThreadPoolExecutorService
     {
         /// <summary>
-        ///     Schedules the specified run.
+        /// TBD
         /// </summary>
-        /// <param name="run">The run.</param>
-        public override void Schedule(Action run)
+        /// <param name="run">TBD</param>
+        public override void Execute(IRunnable run)
         {
-            var wc = new WaitCallback(_ => run());
-            ThreadPool.UnsafeQueueUserWorkItem(wc, null);
-            //ThreadPool.QueueUserWorkItem(wc, null);
+            ThreadPool.QueueUserWorkItem(Executor, run);
+        }
+
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="id">TBD</param>
+        public PartialTrustThreadPoolExecutorService(string id) : base(id)
+        {
         }
     }
 
+
     /// <summary>
-    ///     Dispatcher that dispatches messages on the current synchronization context, e.g. WinForms or WPF GUI thread
+    /// INTERNAL API
+    /// 
+    /// Executes its tasks using the <see cref="TaskScheduler"/>
     /// </summary>
-    public class CurrentSynchronizationContextDispatcher : MessageDispatcher
+    internal sealed class TaskSchedulerExecutor : ExecutorService
     {
         /// <summary>
         ///     The scheduler
         /// </summary>
-        private readonly TaskScheduler scheduler;
+        private TaskScheduler _scheduler;
 
         /// <summary>
-        ///     Initializes a new instance of the <see cref="CurrentSynchronizationContextDispatcher" /> class.
+        /// TBD
         /// </summary>
-        public CurrentSynchronizationContextDispatcher()
+        /// <param name="id">TBD</param>
+        /// <param name="scheduler">TBD</param>
+        public TaskSchedulerExecutor(string id, TaskScheduler scheduler) : base(id)
         {
-            scheduler = TaskScheduler.FromCurrentSynchronizationContext();
+            _scheduler = scheduler;
+        }
+
+        // cache the delegate used for execution to prevent allocations
+        private static readonly Action<object> Executor = t => { ((IRunnable)t).Run(); };
+
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="run">TBD</param>
+        public override void Execute(IRunnable run)
+        {
+            var t = new Task(Executor, run);
+            t.Start(_scheduler);
         }
 
         /// <summary>
-        ///     Schedules the specified run.
+        /// TBD
         /// </summary>
-        /// <param name="run">The run.</param>
-        public override void Schedule(Action run)
+        public override void Shutdown()
         {
-            var t = new Task(run);
-            t.Start(scheduler);
+            // clear the scheduler
+            _scheduler = null;
         }
     }
 
     /// <summary>
-    ///     Class SingleThreadDispatcher.
+    /// ForkJoinExecutorService - custom multi-threaded dispatcher that runs on top of a 
+    /// <see cref="Helios.Concurrency.DedicatedThreadPool"/>, designed to be used for mission-critical actors
+    /// that can't afford <see cref="ThreadPool"/> starvation.
+    /// 
+    /// Relevant configuration options:
+    /// <code>
+    ///     my-forkjoin-dispatcher {
+    ///         type = ForkJoinDispatcher
+    ///         throughput = 100
+    ///         dedicated-thread-pool { #settings for Helios.DedicatedThreadPool
+    ///             thread-count = 3 #number of threads
+    ///             #deadlock-timeout = 3s #optional timeout for deadlock detection
+    ///             threadtype = background #values can be "background" or "foreground"
+    ///         }
+    ///     }
+    /// </code>
     /// </summary>
-    public class SingleThreadDispatcher : MessageDispatcher
+    internal sealed class ForkJoinExecutor : ExecutorService
     {
-        /// <summary>
-        ///     The queue
-        /// </summary>
-        private readonly BlockingCollection<Action> queue = new BlockingCollection<Action>();
+        private DedicatedThreadPool _dedicatedThreadPool;
+        private byte _shuttingDown = 0;
 
         /// <summary>
-        ///     The running
+        /// TBD
         /// </summary>
-        private volatile bool running = true;
-
-        /// <summary>
-        ///     Initializes a new instance of the <see cref="SingleThreadDispatcher" /> class.
-        /// </summary>
-        public SingleThreadDispatcher()
+        /// <param name="id">TBD</param>
+        /// <param name="poolSettings">TBD</param>
+        public ForkJoinExecutor(string id, DedicatedThreadPoolSettings poolSettings) : base(id)
         {
-            var thread = new Thread(_ =>
-            {
-                foreach (var next in queue.GetConsumingEnumerable())
-                {
-                    next();
-                    if (!running) return;
-                }
-            });
-            thread.Start(); //thread won't start automatically without this
+            _dedicatedThreadPool = new DedicatedThreadPool(poolSettings);
         }
 
         /// <summary>
-        ///     Schedules the specified run.
+        /// TBD
         /// </summary>
-        /// <param name="run">The run.</param>
-        public override void Schedule(Action run)
+        /// <param name="run">TBD</param>
+        /// <exception cref="RejectedExecutionException">
+        /// This exception is thrown if this method is called during the shutdown of this executor.
+        /// </exception>
+        public override void Execute(IRunnable run)
         {
-            queue.Add(run);
+            if (Volatile.Read(ref _shuttingDown) == 1)
+                throw new RejectedExecutionException("ForkJoinExecutor is shutting down");
+            _dedicatedThreadPool.QueueUserWorkItem(run.Run);
+        }
+
+        /// <summary>
+        /// TBD
+        /// </summary>
+        public override void Shutdown()
+        {
+            // shut down the dedicated threadpool and null it out
+            Volatile.Write(ref _shuttingDown, 1);
+            _dedicatedThreadPool?.Dispose();
+            _dedicatedThreadPool = null;
         }
     }
 
+
     /// <summary>
-    ///     Class Dispatchers.
+    /// The registry of all <see cref="MessageDispatcher"/> instances available to this <see cref="ActorSystem"/>.
     /// </summary>
-    public class Dispatchers
+    public sealed class Dispatchers
     {
         /// <summary>
         ///     The default dispatcher identifier, also the full key of the configuration of the default dispatcher.
         /// </summary>
-        public readonly static string DefaultDispatcherId = "akka.actor.default-dispatcher";
-        public readonly static string SynchronizedDispatcherId = "akka.actor.synchronized-dispatcher";
+        public static readonly string DefaultDispatcherId = "akka.actor.default-dispatcher";
+
+        /// <summary>
+        ///     The identifier for synchronized dispatchers.
+        /// </summary>
+        public static readonly string SynchronizedDispatcherId = "akka.actor.synchronized-dispatcher";
 
         private readonly ActorSystem _system;
-
+        private CachingConfig _cachingConfig;
         private readonly MessageDispatcher _defaultGlobalDispatcher;
+
+        /// <summary>
+        /// The list of all configurators used to create <see cref="MessageDispatcher"/> instances.
+        /// 
+        /// Has to be thread-safe, as this collection can be accessed concurrently by many actors.
+        /// </summary>
+        private readonly ConcurrentDictionary<string, MessageDispatcherConfigurator> _dispatcherConfigurators = new ConcurrentDictionary<string, MessageDispatcherConfigurator>();
 
         /// <summary>Initializes a new instance of the <see cref="Dispatchers" /> class.</summary>
         /// <param name="system">The system.</param>
-        public Dispatchers(ActorSystem system)
+        /// <param name="prerequisites">The prerequisites required for some <see cref="MessageDispatcherConfigurator"/> instances.</param>
+        public Dispatchers(ActorSystem system, IDispatcherPrerequisites prerequisites)
         {
             _system = system;
-            _defaultGlobalDispatcher = FromConfig(DefaultDispatcherId);
+            Prerequisites = prerequisites;
+            _cachingConfig = new CachingConfig(prerequisites.Settings.Config);
+            _defaultGlobalDispatcher = Lookup(DefaultDispatcherId);
         }
 
         /// <summary>Gets the one and only default dispatcher.</summary>
@@ -187,85 +241,239 @@ namespace Akka.Dispatch
         }
 
         /// <summary>
-        ///     Gets the MessageDispatcher for the current SynchronizationContext.
-        ///     Use this when scheduling actors in a UI thread.
+        /// The <see cref="Configuration.Config"/> for the default dispatcher.
         /// </summary>
-        /// <returns>MessageDispatcher.</returns>
-        public static MessageDispatcher FromCurrentSynchronizationContext()
+        public Config DefaultDispatcherConfig
         {
-            return new CurrentSynchronizationContextDispatcher();
-        }
-
-
-        public MessageDispatcher Lookup(string dispatcherName)
-        {
-            return FromConfig(dispatcherName);
+            get
+            {
+                return
+                    IdConfig(DefaultDispatcherId)
+                        .WithFallback(Prerequisites.Settings.Config.GetConfig(DefaultDispatcherId));
+            }
         }
 
         /// <summary>
-        ///     Froms the configuration.
+        /// INTERNAL API
+        /// 
+        /// Used when a plugin like Akka.Persistence needs to be able to load dispatcher configurations to the chain.
         /// </summary>
-        /// <param name="path">The path.</param>
-        /// <returns>MessageDispatcher.</returns>
-        public MessageDispatcher FromConfig(string path)
+        /// <param name="prerequisites">TBD</param>
+        internal void ReloadPrerequisites(IDispatcherPrerequisites prerequisites)
         {
-            //TODO: this should not exist, it is only here because we dont serialize dispathcer when doing remote deploy..
-            if (string.IsNullOrEmpty(path))
+            Prerequisites = prerequisites;
+            _cachingConfig = new CachingConfig(prerequisites.Settings.Config);
+        }
+
+        /// <summary>
+        /// The prerequisites required for some <see cref="MessageDispatcherConfigurator"/> instances.
+        /// </summary>
+        public IDispatcherPrerequisites Prerequisites { get; private set; }
+
+        /// <summary>
+        /// Returns a dispatcher as specified in configuration. Please note that this method _MAY_
+        /// create and return a new dispatcher on _EVERY_ call.
+        /// </summary>
+        /// <param name="dispatcherName">TBD</param>
+        /// <exception cref="ConfigurationException">
+        /// This exception is thrown if the specified dispatcher cannot be found in the configuration.
+        /// </exception>
+        /// <returns>TBD</returns>
+        public MessageDispatcher Lookup(string dispatcherName)
+        {
+            return LookupConfigurator(dispatcherName).Dispatcher();
+        }
+
+        /// <summary>
+        /// Checks that configuration provides a section for the given dispatcher.
+        /// This does not guarantee that no <see cref="ConfigurationException"/> will be thrown
+        /// when using the dispatcher, because the details can only be checked by trying to
+        /// instantiate it, which might be undesirable when just checking.
+        /// </summary>
+        /// <param name="id">TBD</param>
+        public bool HasDispatcher(string id)
+        {
+            return _dispatcherConfigurators.ContainsKey(id) || _cachingConfig.HasPath(id);
+        }
+
+        private MessageDispatcherConfigurator LookupConfigurator(string id)
+        {
+            if (!_dispatcherConfigurators.TryGetValue(id, out var configurator))
             {
-                var disp = new ThreadPoolDispatcher
-                {
-                    Throughput = 100
-                };
-                return disp;
+                // It doesn't matter if we create a dispatcher configurator that isn't used due to concurrent lookup.
+                // That shouldn't happen often and in case it does the actual ExecutorService isn't
+                // created until used, i.e. cheap.
+                MessageDispatcherConfigurator newConfigurator;
+                if (_cachingConfig.HasPath(id))
+                    newConfigurator = ConfiguratorFrom(Config(id));
+                else
+                    throw new ConfigurationException($"Dispatcher {id} not configured.");
+
+                return _dispatcherConfigurators.TryAdd(id, newConfigurator) ? newConfigurator : _dispatcherConfigurators[id];
             }
 
-            Config config = _system.Settings.Config.GetConfig(path);
-            string type = config.GetString("type");
-            int throughput = config.GetInt("throughput");
-            long throughputDeadlineTime = config.GetTimeSpan("throughput-deadline-time").Ticks;
-            //shutdown-timeout
-            //throughput-deadline-time
-            //attempt-teamwork
-            //mailbox-requirement
+            return configurator;
+        }
 
-            MessageDispatcher dispatcher;
+        /// <summary>
+        /// INTERNAL API
+        /// 
+        /// Creates a dispatcher from a <see cref="Configuration.Config"/>. Internal test purpose only.
+        /// <code>
+        /// From(Config.GetConfig(id));
+        /// </code>
+        /// 
+        /// The Config must also contain an `id` property, which is the identifier of the dispatcher.
+        /// </summary>
+        /// <param name="cfg">The provided configuration section.</param>
+        /// <exception cref="ConfigurationException">
+        /// This exception is thrown if the specified dispatcher cannot be found in <paramref name="cfg"/>.
+        /// It can also be thrown if the dispatcher path or type cannot be resolved.
+        /// </exception>
+        /// <returns>An instance of the <see cref="MessageDispatcher"/>, if valid.</returns>
+        internal MessageDispatcher From(Config cfg)
+        {
+            return ConfiguratorFrom(cfg).Dispatcher();
+        }
+
+        /// <summary>
+        /// Register a <see cref="MessageDispatcherConfigurator"/> that will be used by <see cref="Lookup"/>
+        /// and <see cref="HasDispatcher"/> instead of looking up the configurator from the system
+        /// configuration.
+        /// 
+        /// This enables dynamic addition of dispatchers.
+        /// 
+        /// <remarks>
+        /// A <see cref="MessageDispatcherConfigurator"/> for a certain id can only be registered once,
+        /// i.e. it can not be replaced. It is safe to call this method multiple times, but only the
+        /// first registration will be used.
+        /// </remarks>
+        /// </summary>
+        /// <param name="id">TBD</param>
+        /// <param name="configurator">TBD</param>
+        /// <returns>This method returns <c>true</c> if the specified configurator was successfully registered.</returns>
+        public bool RegisterConfigurator(string id, MessageDispatcherConfigurator configurator)
+        {
+            return _dispatcherConfigurators.TryAdd(id, configurator);
+        }
+
+        /// <summary>
+        /// INTERNAL API
+        /// </summary>
+        private Config Config(string id)
+        {
+            return Config(id, Prerequisites.Settings.Config.GetConfig(id));
+        }
+
+        private Config Config(string id, Config appConfig)
+        {
+            var simpleName = id.Substring(id.LastIndexOf('.') + 1);
+            return IdConfig(id)
+                .WithFallback(appConfig)
+                .WithFallback(ConfigurationFactory.ParseString(string.Format("name: {0}", simpleName)))
+                .WithFallback(DefaultDispatcherConfig);
+        }
+
+        private Config IdConfig(string id)
+        {
+            return ConfigurationFactory.ParseString(string.Format("id: {0}", id));
+        }
+
+
+        private static readonly Config ForkJoinExecutorConfig = ConfigurationFactory.ParseString("executor=fork-join-executor");
+
+        private static readonly Config CurrentSynchronizationContextExecutorConfig =
+            ConfigurationFactory.ParseString(@"executor=current-context-executor");
+
+        private static readonly Config TaskExecutorConfig = ConfigurationFactory.ParseString(@"executor=task-executor");
+        private MessageDispatcherConfigurator ConfiguratorFrom(Config cfg)
+        {
+            if (!cfg.HasPath("id")) throw new ConfigurationException($"Missing dispatcher `id` property in config: {cfg.Root}");
+
+            var id = cfg.GetString("id");
+            var type = cfg.GetString("type");
+
+
+            MessageDispatcherConfigurator dispatcher;
+            /*
+             * Fallbacks are added here in order to preserve backwards compatibility with versions of AKka.NET prior to 1.1,
+             * before the ExecutorService system was implemented
+             */
             switch (type)
             {
                 case "Dispatcher":
-                    dispatcher = new ThreadPoolDispatcher();
+                    dispatcher = new DispatcherConfigurator(cfg, Prerequisites);
                     break;
                 case "TaskDispatcher":
-                    dispatcher = new TaskDispatcher();
+                    dispatcher = new DispatcherConfigurator(TaskExecutorConfig.WithFallback(cfg), Prerequisites);
                     break;
                 case "PinnedDispatcher":
-                    dispatcher = new SingleThreadDispatcher();
+                    dispatcher = new PinnedDispatcherConfigurator(cfg, Prerequisites);
+                    break;
+                case "ForkJoinDispatcher":
+                    dispatcher = new DispatcherConfigurator(ForkJoinExecutorConfig.WithFallback(cfg), Prerequisites);
                     break;
                 case "SynchronizedDispatcher":
-                    dispatcher = new CurrentSynchronizationContextDispatcher();
+                    dispatcher = new CurrentSynchronizationContextDispatcherConfigurator(cfg, Prerequisites);
                     break;
                 case null:
-                    throw new NotSupportedException("Could not resolve dispatcher for path " + path + ". type is null");
+                    throw new ConfigurationException($"Could not resolve dispatcher for path {id}. type is null");
                 default:
                     Type dispatcherType = Type.GetType(type);
                     if (dispatcherType == null)
                     {
-                        throw new NotSupportedException("Could not resolve dispatcher type " + type + " for path " + path);
+                        throw new ConfigurationException($"Could not resolve dispatcher type {type} for path {id}");
                     }
-                    dispatcher = (MessageDispatcher)Activator.CreateInstance(dispatcherType);
+                    dispatcher = (MessageDispatcherConfigurator)Activator.CreateInstance(dispatcherType, cfg, Prerequisites);
                     break;
-            }
-
-            dispatcher.Throughput = throughput;
-            if (throughputDeadlineTime > 0)
-            {
-                dispatcher.ThroughputDeadlineTime = throughputDeadlineTime;
-            }
-            else
-            {
-                dispatcher.ThroughputDeadlineTime = null;
             }
 
             return dispatcher;
         }
     }
+
+    /// <summary>
+    /// The cached <see cref="MessageDispatcher"/> factory that gets looked up via configuration
+    /// inside <see cref="Dispatchers"/>
+    /// </summary>
+    public sealed class DispatcherConfigurator : MessageDispatcherConfigurator
+    {
+        private readonly MessageDispatcher _instance;
+
+        /// <summary>
+        /// Used to configure and produce <see cref="Dispatcher"/> instances for use with actors.
+        /// </summary>
+        /// <param name="config">The configuration for this dispatcher.</param>
+        /// <param name="prerequisites">System prerequisites needed to run this dispatcher.</param>
+        public DispatcherConfigurator(Config config, IDispatcherPrerequisites prerequisites)
+            : base(config, prerequisites)
+        {
+            // Need to see if a non-zero value is available for this setting
+            TimeSpan deadlineTime = config.GetTimeSpan("throughput-deadline-time");
+            long? deadlineTimeTicks = null;
+            if (deadlineTime.Ticks > 0)
+                deadlineTimeTicks = deadlineTime.Ticks;
+
+            _instance = new Dispatcher(this, config.GetString("id"), 
+                config.GetInt("throughput"),
+                deadlineTimeTicks,
+                ConfigureExecutor(),
+                config.GetTimeSpan("shutdown-timeout"));
+        }
+
+
+        /// <summary>
+        /// Returns a <see cref="MessageDispatcherConfigurator.Dispatcher"/> instance.
+        /// 
+        /// Whether or not this <see cref="MessageDispatcherConfigurator"/> returns a new instance 
+        /// or returns a reference to an existing instance is an implementation detail of the
+        /// underlying implementation.
+        /// </summary>
+        /// <returns>TBD</returns>
+        public override MessageDispatcher Dispatcher()
+        {
+            return _instance;
+        }
+    }
 }
+

@@ -1,68 +1,81 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="DeadLetterListener.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using Akka.Actor;
 
 namespace Akka.Event
 {
     /// <summary>
-    ///     Class DeadLetterListener.
+    /// This class represents an actor responsible for listening to <see cref="DeadLetter"/> messages and logging them using the <see cref="EventStream"/>.
     /// </summary>
     public class DeadLetterListener : ActorBase
     {
-        /// <summary>
-        ///     The event stream
-        /// </summary>
         private readonly EventStream _eventStream = Context.System.EventStream;
-
-        /// <summary>
-        ///     The maximum count
-        /// </summary>
         private readonly int _maxCount = Context.System.Settings.LogDeadLetters;
-
-        /// <summary>
-        ///     The count
-        /// </summary>
         private int _count;
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="reason">TBD</param>
         protected override void PostRestart(Exception reason)
         {
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         protected override void PreStart()
         {
             _eventStream.Subscribe(Self, typeof (DeadLetter));
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         protected override void PostStop()
         {
             _eventStream.Unsubscribe(Self);
         }
 
         /// <summary>
-        ///     Processor for user defined messages.
+        /// TBD
         /// </summary>
-        /// <param name="message">The message.</param>
+        /// <param name="message">TBD</param>
+        /// <returns>TBD</returns>
         protected override bool Receive(object message)
         {
             var deadLetter = (DeadLetter)message;
-            ActorRef snd = deadLetter.Sender;
-            ActorRef rcp = deadLetter.Recipient;
+            var snd = deadLetter.Sender;
+            var rcp = deadLetter.Recipient;
+
             _count++;
-            bool done = _maxCount != int.MaxValue && _count >= _maxCount;
-            string doneMsg = done ? ", no more dead letters will be logged" : "";
+            
+            var done = _maxCount != int.MaxValue && _count >= _maxCount;
+            var doneMsg = done ? ", no more dead letters will be logged" : "";
+
             if (!done)
             {
-                var rcpPath = rcp == ActorRef.NoSender ? "NoSender" : rcp.Path.ToString();
-                var sndPath = snd == ActorRef.NoSender ? "NoSender" : snd.Path.ToString();
+                var rcpPath = rcp == ActorRefs.NoSender ? "NoSender" : rcp.Path.ToString();
+                var sndPath = snd == ActorRefs.NoSender ? "NoSender" : snd.Path.ToString();
 
                 _eventStream.Publish(new Info(rcpPath, rcp.GetType(),
                     string.Format("Message {0} from {1} to {2} was not delivered. {3} dead letters encountered.{4}",
                         deadLetter.Message.GetType().Name, sndPath, rcpPath, _count, doneMsg)));
             }
+
             if (done)
             {
-                ((InternalActorRef)Self).Stop();
+                ((IInternalActorRef) Self).Stop();
             }
+
             return true;
         }
     }
 }
+

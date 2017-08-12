@@ -1,67 +1,65 @@
-﻿using Akka.Actor;
+﻿//-----------------------------------------------------------------------
+// <copyright file="LogEvent.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+using Akka.Actor;
 
 namespace Akka.Event
 {
     /// <summary>
-    ///     Class LogEvent.
+    /// This class represents a logging event in the system.
     /// </summary>
-    public abstract class LogEvent : NoSerializationVerificationNeeded
+    public abstract class LogEvent : INoSerializationVerificationNeeded
     {
         /// <summary>
-        ///     Initializes a new instance of the <see cref="LogEvent" /> class.
+        /// Initializes a new instance of the <see cref="LogEvent" /> class.
         /// </summary>
-        public LogEvent()
+        protected LogEvent()
         {
-            Timestamp = DateTime.Now;
+            Timestamp = DateTime.UtcNow;
             Thread = Thread.CurrentThread;
         }
 
         /// <summary>
-        ///     Gets the timestamp.
+        /// The timestamp that this event occurred.
         /// </summary>
-        /// <value>The timestamp.</value>
         public DateTime Timestamp { get; private set; }
 
         /// <summary>
-        ///     Gets the thread.
+        /// The thread where this event occurred.
         /// </summary>
-        /// <value>The thread.</value>
         public Thread Thread { get; private set; }
 
         /// <summary>
-        ///     Gets or sets the log source.
+        /// The source that generated this event.
         /// </summary>
-        /// <value>The log source.</value>
         public string LogSource { get; protected set; }
 
         /// <summary>
-        ///     Gets or sets the log class.
+        /// The type that generated this event.
         /// </summary>
-        /// <value>The log class.</value>
         public Type LogClass { get; protected set; }
 
         /// <summary>
-        ///     Gets or sets the message.
+        /// The message associated with this event.
         /// </summary>
-        /// <value>The message.</value>
         public object Message { get; protected set; }
 
         /// <summary>
-        ///     Logs the level.
+        /// Retrieves the <see cref="Akka.Event.LogLevel" /> used to classify this event.
         /// </summary>
-        /// <returns>LogLevel.</returns>
+        /// <returns>The <see cref="Akka.Event.LogLevel" /> used to classify this event.</returns>
         public abstract LogLevel LogLevel();
 
         /// <summary>
-        ///     Returns a <see cref="System.String" /> that represents this instance.
+        /// Returns a <see cref="System.String" /> that represents this LogEvent.
         /// </summary>
-        /// <returns>A <see cref="System.String" /> that represents this instance.</returns>
+        /// <returns>A <see cref="System.String" /> that represents this LogEvent.</returns>
         public override string ToString()
         {
             return string.Format("[{0}][{1}][Thread {2}][{3}] {4}", LogLevel().ToString().Replace("Level", "").ToUpperInvariant(), Timestamp, Thread.ManagedThreadId.ToString().PadLeft(4, '0'), LogSource, Message);

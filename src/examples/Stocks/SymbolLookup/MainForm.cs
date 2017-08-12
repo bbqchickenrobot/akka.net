@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="MainForm.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Windows.Forms;
@@ -7,7 +14,6 @@ using QDFeedParser;
 using SymbolLookup.Actors;
 using SymbolLookup.Actors.Messages;
 using SymbolLookup.YahooFinance;
-using Akka.Dispatch;
 
 namespace SymbolLookup
 {
@@ -16,7 +22,7 @@ namespace SymbolLookup
         private readonly object m_lock = new object();
         public ImmutableDictionary<string, Tuple<Quote, IFeed>> StockData { get; set; }
         public ActorSystem ActorSystem;
-        public ActorRef StockActor;
+        public IActorRef StockActor;
 
         public event EventHandler<FullStockData> DataAvailable;
         public event EventHandler<string> StatusChange;
@@ -73,7 +79,7 @@ namespace SymbolLookup
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            ActorSystem.Shutdown();
+            ActorSystem.Terminate();
         }
 
         private void btn_Go_Click(object sender, EventArgs e)
@@ -81,7 +87,8 @@ namespace SymbolLookup
             //Do nothing
             if (string.IsNullOrEmpty(txtSymbols.Text))
                 return;
-            StockActor.Tell(txtSymbols.Text, ActorRef.NoSender);
+            StockActor.Tell(txtSymbols.Text, ActorRefs.NoSender);
         }
     }
 }
+

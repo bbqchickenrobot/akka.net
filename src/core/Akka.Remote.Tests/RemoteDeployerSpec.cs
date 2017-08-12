@@ -1,10 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿//-----------------------------------------------------------------------
+// <copyright file="RemoteDeployerSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using Akka.Actor;
-using Akka.Actor.Internals;
+using Akka.Actor.Internal;
 using Akka.Configuration;
 using Akka.Remote.Routing;
 using Akka.Routing;
@@ -23,7 +25,7 @@ namespace Akka.Remote.Tests
         public RemoteDeployerSpec()
             : base(@"
             akka.actor.provider = ""Akka.Remote.RemoteActorRefProvider, Akka.Remote""
-            akka.remote.helios.tcp.port = 0
+            akka.remote.dot-netty.tcp.port = 0
             akka.actor.deployment {
                 /service2 {
                   router = round-robin-pool
@@ -56,3 +58,4 @@ namespace Akka.Remote.Tests
         }
     }
 }
+

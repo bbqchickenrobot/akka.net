@@ -1,11 +1,20 @@
-﻿using System;
-using System.Reflection;
+﻿//-----------------------------------------------------------------------
+// <copyright file="TestKitBase_AwaitConditions.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Threading;
 using Akka.Event;
 using Akka.TestKit.Internal;
 
 namespace Akka.TestKit
 {
+    /// <summary>
+    /// TBD
+    /// </summary>
     public abstract partial class TestKitBase
     {
         /// <summary>
@@ -21,15 +30,11 @@ namespace Akka.TestKit
         /// </para>
         /// </summary>
         /// <param name="conditionIsFulfilled">The condition that must be fulfilled within the duration.</param>
-        /// <param name="max">The maximum duration. If undefined, uses the remaining time 
-        /// (if inside a `within` block) or the value specified in config value "akka.test.single-expect-default". 
-        /// The value is <see cref="Dilated(TimeSpan)">dilated</see>, i.e. scaled by the factor 
-        /// specified in config value "akka.test.timefactor".</param>
         public void AwaitCondition(Func<bool> conditionIsFulfilled)
         {
             var maxDur = RemainingOrDefault;
             var interval = new TimeSpan(maxDur.Ticks / 10);
-            var logger = _testKitSettings.LogTestKitCalls ? _log : null;
+            var logger = _testState.TestKitSettings.LogTestKitCalls ? _testState.Log : null;
             InternalAwaitCondition(conditionIsFulfilled, maxDur, interval, (format, args) => _assertions.Fail(format, args), logger);
         }
 
@@ -55,7 +60,7 @@ namespace Akka.TestKit
         {
             var maxDur = RemainingOrDilated(max);
             var interval = new TimeSpan(maxDur.Ticks / 10);
-            var logger = _testKitSettings.LogTestKitCalls ? _log : null;
+            var logger = _testState.TestKitSettings.LogTestKitCalls ? _testState.Log : null;
             InternalAwaitCondition(conditionIsFulfilled, maxDur, interval, (format, args) => _assertions.Fail(format, args), logger);
         }
 
@@ -82,7 +87,7 @@ namespace Akka.TestKit
         {
             var maxDur = RemainingOrDilated(max);
             var interval = new TimeSpan(maxDur.Ticks / 10);
-            var logger = _testKitSettings.LogTestKitCalls ? _log : null;
+            var logger = _testState.TestKitSettings.LogTestKitCalls ? _testState.Log : null;
             InternalAwaitCondition(conditionIsFulfilled, maxDur, interval, (format, args) => AssertionsFail(format, args, message), logger);
         }
 
@@ -116,7 +121,7 @@ namespace Akka.TestKit
         public void AwaitCondition(Func<bool> conditionIsFulfilled, TimeSpan? max, TimeSpan? interval, string message = null)
         {
             var maxDur = RemainingOrDilated(max);
-            var logger = _testKitSettings.LogTestKitCalls ? _log : null;
+            var logger = _testState.TestKitSettings.LogTestKitCalls ? _testState.Log : null;
             InternalAwaitCondition(conditionIsFulfilled, maxDur, interval, (format, args) => AssertionsFail(format, args, message), logger);
         }
 
@@ -137,6 +142,7 @@ namespace Akka.TestKit
         /// <param name="interval">Optional. The time between calls to <paramref name="conditionIsFulfilled"/> to check
         /// if the condition is fulfilled. Between calls the thread sleeps. If undefined, 100 ms is used
         /// </param>
+        /// <returns>TBD</returns>
         public bool AwaitConditionNoThrow(Func<bool> conditionIsFulfilled, TimeSpan max, TimeSpan? interval = null)
         {
             var intervalDur = interval.GetValueOrDefault(TimeSpan.FromMilliseconds(100));
@@ -170,7 +176,7 @@ namespace Akka.TestKit
         /// </param>
         /// <param name="fail">Action that is called when the timeout expired. 
         /// The parameters conforms to <see cref="string.Format(string,object[])"/></param>
-        /// <param name="logger">Optional: If a <see cref="LoggingAdapter"/> is specified, debug messages will be logged using it</param>
+        /// <returns>TBD</returns>
         protected static bool InternalAwaitCondition(Func<bool> conditionIsFulfilled, TimeSpan max, TimeSpan? interval, Action<string, object[]> fail)
         {
             return InternalAwaitCondition(conditionIsFulfilled, max, interval, fail, null);
@@ -202,8 +208,9 @@ namespace Akka.TestKit
         /// </param>
         /// <param name="fail">Action that is called when the timeout expired. 
         /// The parameters conforms to <see cref="string.Format(string,object[])"/></param>
-        /// <param name="logger">If a <see cref="LoggingAdapter"/> is specified, debug messages will be logged using it. If <c>null</c> nothing will be logged</param>
-        protected static bool InternalAwaitCondition(Func<bool> conditionIsFulfilled, TimeSpan max, TimeSpan? interval, Action<string, object[]> fail, LoggingAdapter logger)
+        /// <param name="logger">If a <see cref="ILoggingAdapter"/> is specified, debug messages will be logged using it. If <c>null</c> nothing will be logged</param>
+        /// <returns>TBD</returns>
+        protected static bool InternalAwaitCondition(Func<bool> conditionIsFulfilled, TimeSpan max, TimeSpan? interval, Action<string, object[]> fail, ILoggingAdapter logger)
         {
             max.EnsureIsPositiveFinite("max");
             var start = Now;
@@ -228,7 +235,7 @@ namespace Akka.TestKit
             return true;
         }
 
-        private static void ConditionalLog(LoggingAdapter logger, string format, params object[] args)
+        private static void ConditionalLog(ILoggingAdapter logger, string format, params object[] args)
         {
             if (logger != null)
                 logger.Debug(format, args);

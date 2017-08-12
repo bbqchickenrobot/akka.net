@@ -1,12 +1,15 @@
-using System;
-using Akka.Actor;
-using Akka.Event;
-using Akka.TestKit;
-using Akka.TestKit.TestActors;
+﻿// <copyright file="EventFilterTestBase.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
 
-namespace Akka.Testkit.Tests.TestEventListenerTests
+using Akka.Event;
+using Akka.Testkit.Tests.TestEventListenerTests;
+
+namespace Akka.TestKit.Tests.Xunit2.TestEventListenerTests
 {
-    public abstract class EventFilterTestBase : TestKit.Xunit.TestKit
+    public abstract class EventFilterTestBase : TestKit.Xunit2.TestKit
     {
         /// <summary>
         /// Used to signal that the test was successful and that we should ensure no more messages were logged
@@ -22,7 +25,7 @@ namespace Akka.Testkit.Tests.TestEventListenerTests
             // ReSharper disable once DoNotCallOverridableMethodsInConstructor
             SendRawLogEventMessage(initLoggerMessage);
             ExpectMsg("OK");
-            //From now on we know that all messsages will be forwarded to TestActor
+            //From now on we know that all messages will be forwarded to TestActor
         }
 
         protected abstract void SendRawLogEventMessage(object message);
@@ -48,3 +51,4 @@ namespace Akka.Testkit.Tests.TestEventListenerTests
 
     }
 }
+

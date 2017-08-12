@@ -1,30 +1,55 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ActorCell.ReceiveTimeout.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 
 namespace Akka.Actor
-{	
+{
+    /// <summary>
+    /// TBD
+    /// </summary>
+    public interface INotInfluenceReceiveTimeout
+    {
+    }
+
     public partial class ActorCell
     {
         private TimeSpan? _receiveTimeoutDuration = null;
-        private CancellationTokenSource _pendingReceiveTimeout = null;
+        private ICancelable _pendingReceiveTimeout = null;
 
-		public void SetReceiveTimeout(TimeSpan? timeout=null)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="timeout">TBD</param>
+        public void SetReceiveTimeout(TimeSpan? timeout=null)
         {
             _receiveTimeoutDuration = timeout;
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        public TimeSpan? ReceiveTimeout
+        {
+            get
+            {
+                return _receiveTimeoutDuration;
+            }
+        }
+
+        /// <summary>
+        /// TBD
+        /// </summary>
         public void CheckReceiveTimeout()
         {
             CancelReceiveTimeout();
             if (_receiveTimeoutDuration != null && !Mailbox.HasMessages)
             {
-                _pendingReceiveTimeout = new CancellationTokenSource();
-                System.Scheduler.ScheduleOnce(_receiveTimeoutDuration.Value, Self, ReceiveTimeout.Instance,
-                    _pendingReceiveTimeout.Token);
+                _pendingReceiveTimeout = System.Scheduler.ScheduleTellOnceCancelable(_receiveTimeoutDuration.Value, Self, Akka.Actor.ReceiveTimeout.Instance, Self);
             }
         }
 
@@ -38,3 +63,4 @@ namespace Akka.Actor
         }
     }
 }
+

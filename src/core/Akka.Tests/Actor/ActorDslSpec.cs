@@ -1,7 +1,14 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ActorDslSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
+using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Actor.Dsl;
-using Akka.Dispatch.SysMsg;
 using Akka.TestKit;
 using Xunit;
 
@@ -24,17 +31,23 @@ namespace Akka.Tests.Actor
         {
             var a = Sys.ActorOf(c => c.Become((msg, ctx) =>
             {
-                if (msg == "info")
+                var message = msg as string;
+                if (message == null) return;
+
+                if (message == "info")
                     TestActor.Tell("A");
-                else if (msg == "switch")
+                else if (message == "switch")
                     c.BecomeStacked((msg2, ctx2) =>
                     {
-                        if (msg2 == "info")
+                        var message2 = msg2 as string;
+                        if (message2 == null) return;
+                        
+                        if (message2 == "info")
                             TestActor.Tell("B");
-                        else if (msg2 == "switch")
+                        else if (message2 == "switch")
                             c.UnbecomeStacked();
                     });
-                else if (msg == "lobotomize")
+                else if (message == "lobotomize")
                     c.UnbecomeStacked();
             }));
 
@@ -127,5 +140,50 @@ namespace Akka.Tests.Actor
             ExpectMsg("restarting parent");
             ExpectMsg("stopping child");
         }
+
+        [Fact]
+        public void A_lightweight_creator_must_support_async_receives()
+        {
+            var parent = Sys.ActorOf(act =>
+            {
+                var completedTask = Task.FromResult(true);
+                var child = act.ActorOf(act2 =>
+                {
+                    act2.ReceiveAsync<string>(m => m == "ping", (_, __) =>
+                    {
+                        TestActor.Tell("pong");
+                        return completedTask;
+                    });
+
+                    act2.ReceiveAsync<string>((_, __) =>
+                    {
+                        TestActor.Tell("ping");
+                        return completedTask;
+                    }, msg => msg == "pong");
+
+                    act2.ReceiveAsync<string>((_, __) =>
+                    {
+                        TestActor.Tell("hello");
+                        return completedTask;
+                    });
+                });
+
+                act.ReceiveAnyAsync((msg, _) => 
+                {
+                    child.Tell(msg);
+                    return Task.FromResult(true);
+                });
+            });
+
+            parent.Tell("ping");
+            ExpectMsg("pong");
+
+            parent.Tell("pong");
+            ExpectMsg("ping");
+
+            parent.Tell("hi");
+            ExpectMsg("hello");
+        }
     }
 }
+

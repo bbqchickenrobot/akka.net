@@ -1,8 +1,17 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ChaosJournal.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
+using Akka.Actor;
 using Akka.Persistence.Journal;
 
 namespace Akka.Persistence.Tests.Journal
@@ -11,8 +20,8 @@ namespace Akka.Persistence.Tests.Journal
 
     internal class WriteFailedException : TestException
     {
-        public WriteFailedException(IEnumerable<IPersistentRepresentation> ps)
-            : base(string.Format("write failed for payloads = [{0}]", string.Join(", ", ps.Select(x => x.Payload)))) { }
+        public WriteFailedException(IEnumerable<AtomicWrite> ps)
+            : base(string.Format("write failed for payloads = [{0}]", string.Join(", ", ps.SelectMany(x => (IEnumerable<IPersistentRepresentation>)x.Payload)))) { }
     }
 
     internal class ReplayFailedException : TestException
@@ -26,7 +35,7 @@ namespace Akka.Persistence.Tests.Journal
         public ReadHighestFailedException() : base("recovery failed when reading the highest sequence number") { }
     }
 
-    public class ChaosJournal : SyncWriteJournal, IMemoryMessages
+    public class ChaosJournal : AsyncWriteJournal, IMemoryMessages
     {
         private readonly ConcurrentDictionary<string, LinkedList<IPersistentRepresentation>> _messages = new ConcurrentDictionary<string, LinkedList<IPersistentRepresentation>>();
 
@@ -46,58 +55,83 @@ namespace Akka.Persistence.Tests.Journal
             _readHighestFailureRate = config.GetDouble("read-highest-failure-rate");
         }
 
-        public override Task ReplayMessagesAsync(string persistenceId, long fromSequenceNr, long toSequenceNr, long max, Action<IPersistentRepresentation> replayCallback)
+        public override Task ReplayMessagesAsync(IActorContext context, string persistenceId, long fromSequenceNr, long toSequenceNr, long max, Action<IPersistentRepresentation> recoveryCallback)
         {
+            var promise = new TaskCompletionSource<object>();
             if (ChaosSupportExtensions.ShouldFail(_replayFailureRate))
             {
                 var replays = Read(persistenceId, fromSequenceNr, toSequenceNr, max).ToArray();
-                var top = replays.Take(_random.Next(replays.Length + 1));
+                var top = replays.Take(_random.Next(replays.Length + 1)).ToArray();
                 foreach (var persistentRepresentation in top)
                 {
-                    replayCallback(persistentRepresentation);
+                    recoveryCallback(persistentRepresentation);
                 }
-
-                return Task.FromResult(0L).ContinueWith(task => { throw new ReplayFailedException(top); });
+                promise.SetException(new ReplayFailedException(top));
             }
             else
             {
                 foreach (var p in Read(persistenceId, fromSequenceNr, toSequenceNr, max))
                 {
-                    replayCallback(p);
+                    recoveryCallback(p);
                 }
-                return Task.FromResult(new object());
+                promise.SetResult(new object());
             }
+            return promise.Task;
         }
 
         public override Task<long> ReadHighestSequenceNrAsync(string persistenceId, long fromSequenceNr)
         {
+            var promise = new TaskCompletionSource<long>();
             if (ChaosSupportExtensions.ShouldFail(_readHighestFailureRate))
-                return Task.FromResult(0L).ContinueWith(task => { throw new ReadHighestFailedException(); return 0L; });
+                promise.SetException(new ReadHighestFailedException());
             else
-                return Task.FromResult(HighestSequenceNr(persistenceId));
+                promise.SetResult(HighestSequenceNr(persistenceId));
+            return promise.Task;
         }
 
-        protected override void WriteMessages(IEnumerable<IPersistentRepresentation> messages)
+        protected override Task<IImmutableList<Exception>> WriteMessagesAsync(IEnumerable<AtomicWrite> messages)
         {
+            TaskCompletionSource<IImmutableList<Exception>> promise =
+                new TaskCompletionSource<IImmutableList<Exception>>();
             if (ChaosSupportExtensions.ShouldFail(_writeFailureRate))
-                throw new WriteFailedException(messages);
+                promise.SetException(new WriteFailedException(messages));
             else
             {
-                foreach (var message in messages)
+                try
                 {
-                    Add(message);
+                    foreach (var message in messages)
+                    {
+                        foreach (var persistent in (IEnumerable<IPersistentRepresentation>) message.Payload)
+                        {
+                            Add(persistent);
+                        }
+                    }
+                    promise.SetResult(null);
+                }
+                catch (Exception e)
+                {
+                    promise.SetException(e);
                 }
             }
+            return promise.Task;
         }
 
-        protected override void DeleteMessagesTo(string persistenceId, long toSequenceNr, bool isPermanent)
+        protected override Task DeleteMessagesToAsync(string persistenceId, long toSequenceNr)
         {
-            foreach (var sequenceNr in Enumerable.Range(1, (int)toSequenceNr))
+            TaskCompletionSource<object> promise = new TaskCompletionSource<object>();
+            try
             {
-                if (isPermanent)
-                    Update(persistenceId, sequenceNr, x => x.Update(x.SequenceNr, x.PersistenceId, true, x.Sender));
-                else Delete(persistenceId, sequenceNr);
+                foreach (var sequenceNr in Enumerable.Range(1, (int) toSequenceNr))
+                {
+                    Delete(persistenceId, sequenceNr);
+                }
+                promise.SetResult(new object());
             }
+            catch (Exception e)
+            {
+                promise.SetException(e);
+            }
+            return promise.Task;
         }
 
         #region IMemoryMessages implementation
@@ -111,8 +145,7 @@ namespace Akka.Persistence.Tests.Journal
 
         public Messages Update(string pid, long seqNr, Func<IPersistentRepresentation, IPersistentRepresentation> updater)
         {
-            LinkedList<IPersistentRepresentation> persistents;
-            if (_messages.TryGetValue(pid, out persistents))
+            if (_messages.TryGetValue(pid, out var persistents))
             {
                 var node = persistents.First;
                 while (node != null)
@@ -129,8 +162,7 @@ namespace Akka.Persistence.Tests.Journal
 
         public Messages Delete(string pid, long seqNr)
         {
-            LinkedList<IPersistentRepresentation> persistents;
-            if (_messages.TryGetValue(pid, out persistents))
+            if (_messages.TryGetValue(pid, out var persistents))
             {
                 var node = persistents.First;
                 while (node != null)
@@ -147,8 +179,7 @@ namespace Akka.Persistence.Tests.Journal
 
         public IEnumerable<IPersistentRepresentation> Read(string pid, long fromSeqNr, long toSeqNr, long max)
         {
-            LinkedList<IPersistentRepresentation> persistents;
-            if (_messages.TryGetValue(pid, out persistents))
+            if (_messages.TryGetValue(pid, out var persistents))
             {
                 return persistents
                     .Where(x => x.SequenceNr >= fromSeqNr && x.SequenceNr <= toSeqNr)
@@ -160,11 +191,10 @@ namespace Akka.Persistence.Tests.Journal
 
         public long HighestSequenceNr(string pid)
         {
-            LinkedList<IPersistentRepresentation> persistents;
-            if (_messages.TryGetValue(pid, out persistents))
+            if (_messages.TryGetValue(pid, out var persistents))
             {
                 var last = persistents.LastOrDefault();
-                return last != null ? last.SequenceNr : 0L;
+                return last?.SequenceNr ?? 0L;
             }
 
             return 0L;
@@ -173,3 +203,4 @@ namespace Akka.Persistence.Tests.Journal
         #endregion
     }
 }
+

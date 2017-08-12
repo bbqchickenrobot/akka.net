@@ -1,17 +1,24 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="PersistenceSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Akka.Actor;
 using Akka.Configuration;
 using Akka.TestKit;
 using Akka.Util.Internal;
+using Xunit.Abstractions;
 
 namespace Akka.Persistence.Tests
 {
     public abstract class PersistenceSpec : AkkaSpec
     {
-        public static Config Configuration(string plugin, string test, string serialization = null,
+        public static Config Configuration(string test, string serialization = null,
             string extraConfig = null)
         {
             var c = extraConfig == null
@@ -21,11 +28,10 @@ namespace Akka.Persistence.Tests
                 akka.actor.serialize-creators = {0}
                 akka.actor.serialize-messages = {0}
                 akka.persistence.publish-plugin-commands = on
-                akka.persistence.journal.plugin = ""akka.persistence.journal.{1}""
-                akka.persistence.snapshot-store.local.dir = ""target/snapshots-{2}/""
-                akka.test.single-expect-default = 10s", serialization ?? "on", plugin, test);
+                akka.persistence.snapshot-store.local.dir = ""target/snapshots-{1}/""
+                akka.test.single-expect-default = 10s", serialization ?? "on", test);
 
-            return c.WithFallback(ConfigurationFactory.ParseString(configString)).WithFallback(Persistence.DefaultConfig());
+            return c.WithFallback(ConfigurationFactory.ParseString(configString));
         }
 
         internal readonly Cleanup Clean;
@@ -34,16 +40,16 @@ namespace Akka.Persistence.Tests
 
         private readonly string _name;
 
-        protected PersistenceSpec(string config)
-            : base(config)
+        protected PersistenceSpec(string config, ITestOutputHelper output = null)
+            : base(config, output)
         {
             _name = NamePrefix + "-" + _counter.GetAndIncrement();
             Clean = new Cleanup(this);
             Clean.Initialize();
         }
 
-        protected PersistenceSpec(Config config = null)
-            : base(config)
+        protected PersistenceSpec(Config config = null, ITestOutputHelper output = null)
+            : base(config, output)
         {
             _name = NamePrefix + "-" + _counter.GetAndIncrement();
             Clean = new Cleanup(this);
@@ -60,11 +66,20 @@ namespace Akka.Persistence.Tests
             base.AfterAll();
             Clean.Dispose();
         }
+
+        protected void ExpectMsgInOrder(params object[] ordered)
+        {
+            var msg = ExpectMsg<object[]>();
+            msg
+                //.Select(x => x.ToString())
+                .ShouldOnlyContainInOrder(ordered);
+        }
     }
 
     internal class Cleanup : IDisposable
     {
         internal List<DirectoryInfo> StorageLocations;
+        private static readonly object _syncRoot = new object();
 
         public Cleanup(AkkaSpec spec)
         {
@@ -76,15 +91,27 @@ namespace Akka.Persistence.Tests
 
         public void Initialize()
         {
+            DeleteStorageLocations();
+        }
+
+        private void DeleteStorageLocations()
+        {
             StorageLocations.ForEach(fi =>
             {
-                if (fi.Exists) fi.Delete(true);
+                lock (_syncRoot)
+                {
+                    try
+                    {
+                        if (fi.Exists) fi.Delete(true);    
+                    }
+                    catch (IOException) { }
+                }
             });
         }
 
         public void Dispose()
         {
-            StorageLocations.ForEach(fi => fi.Delete(true));
+            DeleteStorageLocations();
         }
     }
 
@@ -117,3 +144,4 @@ namespace Akka.Persistence.Tests
         }
     }
 }
+

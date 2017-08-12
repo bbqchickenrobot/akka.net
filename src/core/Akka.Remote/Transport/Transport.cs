@@ -1,21 +1,54 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="Transport.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Configuration;
-using Google.ProtocolBuffers;
+using Google.Protobuf;
 using System.Runtime.Serialization;
+using Akka.Event;
 
 namespace Akka.Remote.Transport
 {
+    /// <summary>
+    /// TBD
+    /// </summary>
     public abstract class Transport
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
         public Config Config { get; protected set; }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public ActorSystem System { get; protected set; }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public virtual string SchemeIdentifier { get; protected set; }
+        /// <summary>
+        /// TBD
+        /// </summary>
+        public virtual long MaximumPayloadBytes { get; protected set; }
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <returns>TBD</returns>
         public abstract Task<Tuple<Address, TaskCompletionSource<IAssociationEventListener>>> Listen();
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="remote">TBD</param>
+        /// <returns>TBD</returns>
         public abstract bool IsResponsibleFor(Address remote);
 
         /// <summary>
@@ -52,48 +85,78 @@ namespace Akka.Remote.Transport
     }
 
     /// <summary>
-    /// Indicates that the association setup request is invalid and it is impossible to recover (malformed IP address, unknown hostname, etc...)
+    /// This exception is thrown when an association setup request is invalid and it is impossible to recover (malformed IP address, unknown hostname, etc...).
     /// </summary>
     public class InvalidAssociationException : AkkaException
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="InvalidAssociationException"/> class.
+        /// </summary>
+        /// <param name="message">The message that describes the error.</param>
+        /// <param name="cause">The exception that is the cause of the current exception.</param>
         public InvalidAssociationException(string message, Exception cause = null)
             : base(message, cause)
         {
         }
 
+#if SERIALIZATION
+        /// <summary>
+        /// Initializes a new instance of the <see cref="InvalidAssociationException"/> class.
+        /// </summary>
+        /// <param name="info">The <see cref="SerializationInfo"/> that holds the serialized object data about the exception being thrown.</param>
+        /// <param name="context">The <see cref="StreamingContext"/> that contains contextual information about the source or destination.</param>
         protected InvalidAssociationException(SerializationInfo info, StreamingContext context)
             : base(info, context)
         {
         }
+#endif
     }
 
     /// <summary>
     /// Marker interface for events that the registered listener for a <see cref="AssociationHandle"/> might receive.
     /// </summary>
-    public interface IHandleEvent : NoSerializationVerificationNeeded { }
+    public interface IHandleEvent : INoSerializationVerificationNeeded { }
 
     /// <summary>
     /// Message sent to the listener registered to an association (via the TaskCompletionSource returned by <see cref="AssociationHandle.ReadHandlerSource"/>)
     /// </summary>
     public sealed class InboundPayload : IHandleEvent
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="payload">TBD</param>
         public InboundPayload(ByteString payload)
         {
             Payload = payload;
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public ByteString Payload { get; private set; }
 
+        /// <inheritdoc/>
         public override string ToString()
         {
-            return string.Format("InboundPayload(size = {0} bytes)", Payload.Length);
+            return $"InboundPayload(size = {Payload.Length} bytes)";
         }
     }
 
-    public sealed class Disassociated : IHandleEvent
+    /// <summary>
+    /// TBD
+    /// </summary>
+    public sealed class Disassociated : IHandleEvent, IDeadLetterSuppression
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
         internal readonly DisassociateInfo Info;
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="info">TBD</param>
         public Disassociated(DisassociateInfo info)
         {
             Info = info;
@@ -105,9 +168,20 @@ namespace Akka.Remote.Transport
     /// </summary>
     public sealed class UnderlyingTransportError : IHandleEvent
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
         internal readonly Exception Cause;
+        /// <summary>
+        /// TBD
+        /// </summary>
         internal readonly string Message;
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="cause">TBD</param>
+        /// <param name="message">TBD</param>
         public UnderlyingTransportError(Exception cause, string message)
         {
             Cause = cause;
@@ -120,8 +194,17 @@ namespace Akka.Remote.Transport
     /// </summary>
     public enum DisassociateInfo
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
         Unknown = 0,
+        /// <summary>
+        /// TBD
+        /// </summary>
         Shutdown = 1,
+        /// <summary>
+        /// TBD
+        /// </summary>
         Quarantined = 2
     }
 
@@ -131,22 +214,37 @@ namespace Akka.Remote.Transport
     /// </summary>
     public interface IHandleEventListener
     {
+        /// <summary>
+        /// Notify the listener about an <see cref="IHandleEvent"/>.
+        /// </summary>
+        /// <param name="ev">The <see cref="IHandleEvent"/> to notify the listener about</param>
         void Notify(IHandleEvent ev);
     }
 
     /// <summary>
-    /// Converts an <see cref="ActorRef"/> instance into an <see cref="IHandleEventListener"/>, so <see cref="IHandleEvent"/> messages
+    /// Converts an <see cref="IActorRef"/> into an <see cref="IHandleEventListener"/>, so <see cref="IHandleEvent"/> messages
     /// can be passed directly to the Actor.
     /// </summary>
     public sealed class ActorHandleEventListener : IHandleEventListener
     {
-        public readonly ActorRef Actor;
+        /// <summary>
+        /// The Actor to notify about <see cref="IHandleEvent"/> messages.
+        /// </summary>
+        public readonly IActorRef Actor;
 
-        public ActorHandleEventListener(ActorRef actor)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ActorHandleEventListener"/> class.
+        /// </summary>
+        /// <param name="actor">The Actor to notify about <see cref="IHandleEvent"/> messages.</param>
+        public ActorHandleEventListener(IActorRef actor)
         {
             Actor = actor;
         }
 
+        /// <summary>
+        /// Notify the Actor about an <see cref="IHandleEvent"/> message.
+        /// </summary>
+        /// <param name="ev">The <see cref="IHandleEvent"/> message to notify the Actor about</param>
         public void Notify(IHandleEvent ev)
         {
             Actor.Tell(ev);
@@ -157,7 +255,7 @@ namespace Akka.Remote.Transport
     /// <summary>
     /// Marker type for whenever new actors / endpoints are associated with this <see cref="ActorSystem"/> via remoting.
     /// </summary>
-    public interface IAssociationEvent
+    public interface IAssociationEvent : INoSerializationVerificationNeeded
     {
 
     }
@@ -168,11 +266,18 @@ namespace Akka.Remote.Transport
     /// </summary>
     public sealed class InboundAssociation : IAssociationEvent
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="association">TBD</param>
         public InboundAssociation(AssociationHandle association)
         {
             Association = association;
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public AssociationHandle Association { get; private set; }
     }
 
@@ -181,22 +286,37 @@ namespace Akka.Remote.Transport
     /// </summary>
     public interface IAssociationEventListener
     {
+        /// <summary>
+        /// Notify the listener about an <see cref="IAssociationEvent"/> message.
+        /// </summary>
+        /// <param name="ev">The <see cref="IAssociationEvent"/> message to notify the listener about</param>
         void Notify(IAssociationEvent ev);
     }
 
     /// <summary>
-    /// Converts an <see cref="ActorRef"/> instance into an <see cref="IAssociationEventListener"/>, so <see cref="IAssociationEvent"/> messages
+    /// Converts an <see cref="IActorRef"/> into an <see cref="IAssociationEventListener"/>, so <see cref="IAssociationEvent"/> messages
     /// can be passed directly to the Actor.
     /// </summary>
     public sealed class ActorAssociationEventListener : IAssociationEventListener
     {
-        public ActorAssociationEventListener(ActorRef actor)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ActorAssociationEventListener"/> class.
+        /// </summary>
+        /// <param name="actor">The Actor to notify about <see cref="IAssociationEvent"/> messages.</param>
+        public ActorAssociationEventListener(IActorRef actor)
         {
             Actor = actor;
         }
 
-        public ActorRef Actor { get; private set; }
+        /// <summary>
+        /// The Actor to notify about <see cref="IAssociationEvent"/> messages.
+        /// </summary>
+        public IActorRef Actor { get; private set; }
 
+        /// <summary>
+        /// Notify the Actor about an <see cref="IAssociationEvent"/>.
+        /// </summary>
+        /// <param name="ev">The <see cref="IAssociationEvent"/> message to notify the Actor about</param>
         public void Notify(IAssociationEvent ev)
         {
             Actor.Tell(ev);
@@ -212,6 +332,11 @@ namespace Akka.Remote.Transport
     /// </summary>
     public abstract class AssociationHandle
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="localAddress">TBD</param>
+        /// <param name="remoteAddress">TBD</param>
         protected AssociationHandle(Address localAddress, Address remoteAddress)
         {
             LocalAddress = localAddress;
@@ -237,7 +362,7 @@ namespace Akka.Remote.Transport
         public TaskCompletionSource<IHandleEventListener> ReadHandlerSource { get; protected set; }
 
         /// <summary>
-        /// Asynchronously sends the specified <see cref="payload"/> to the remote endpoint. This method's implementation MUST be thread-safe
+        /// Asynchronously sends the specified <paramref name="payload"/> to the remote endpoint. This method's implementation MUST be thread-safe
         /// as it might be called from different threads. This method MUST NOT block.
         /// 
         /// Writes guarantee ordering of messages, but not their reception. The call to write returns with a boolean indicating if the
@@ -261,6 +386,7 @@ namespace Akka.Remote.Transport
         /// </summary>
         public abstract void Disassociate();
 
+        /// <inheritdoc/>
         public override bool Equals(object obj)
         {
             if (ReferenceEquals(null, obj)) return false;
@@ -269,11 +395,13 @@ namespace Akka.Remote.Transport
             return Equals((AssociationHandle) obj);
         }
 
+        /// <inheritdoc/>
         protected bool Equals(AssociationHandle other)
         {
             return Equals(LocalAddress, other.LocalAddress) && Equals(RemoteAddress, other.RemoteAddress);
         }
 
+        /// <inheritdoc/>
         public override int GetHashCode()
         {
             unchecked
@@ -283,3 +411,4 @@ namespace Akka.Remote.Transport
         }
     }
 }
+

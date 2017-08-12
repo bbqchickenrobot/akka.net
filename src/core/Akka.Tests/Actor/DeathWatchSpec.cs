@@ -1,21 +1,29 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="DeathWatchSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
+using System.Threading;
 using Akka.Actor;
 using Akka.Actor.Internal;
 using Akka.Dispatch;
-using Akka.TestKit;
-using Akka.Tests.TestUtils;
 using Akka.Dispatch.SysMsg;
 using Akka.Event;
-using Akka.Util;
+using Akka.TestKit;
+using Akka.Tests.TestUtils;
+using Akka.Util.Internal;
 using Xunit;
 
 namespace Akka.Tests.Actor
 {
     public class DeathWatchSpec : AkkaSpec
     {
-        private ActorRef _supervisor;
-        private ActorRef _terminal;
+        private IActorRef _supervisor;
+        private IActorRef _terminal;
 
         public DeathWatchSpec()
         {
@@ -48,26 +56,19 @@ namespace Akka.Tests.Actor
         [Fact]
         public void Bug209_any_user_messages_following_a_Terminate_message_should_be_forwarded_to_DeadLetterMailbox()
         {
-            var actor = (LocalActorRef)Sys.ActorOf(Props.Empty, "killed-actor");
+            var actor = (ActorRefWithCell) Sys.ActorOf(Props.Empty, "killed-actor");
+            Watch(actor);
+            Sys.EventStream.Subscribe(TestActor, typeof (DeadLetter));
 
-            Sys.EventStream.Subscribe(TestActor, typeof(DeadLetter));
+            actor.Tell(PoisonPill.Instance);
+            ExpectMsg<Terminated>();
 
-            var mailbox = actor.Cell.Mailbox;
-            //Wait for the mailbox to become idle after processed all initial messages.
-            AwaitCondition(() =>
-                !mailbox.HasUnscheduledMessages && mailbox.Status == Mailbox.MailboxStatus.Idle);
-
-            //Suspend the mailbox and post Terminate and a user message
-            mailbox.Suspend();
-            mailbox.Post(actor, new Envelope() { Message = Terminate.Instance, Sender = TestActor });
-            mailbox.Post(actor, new Envelope() { Message = "SomeUserMessage", Sender = TestActor });
-
-            //Resume the mailbox, which will also schedule
-            mailbox.Resume();
+            actor.Tell(new Envelope("SomeUserMessage", TestActor));
+            ExpectMsg<DeadLetter>(d => ((Envelope)d.Message).Message.Equals("SomeUserMessage"));
 
             //The actor should Terminate, exchange the mailbox to a DeadLetterMailbox and forward the user message to the DeadLetterMailbox
-            ExpectMsg<DeadLetter>(d => (string)d.Message == "SomeUserMessage");
-            actor.Cell.Mailbox.ShouldBe(Sys.Mailboxes.DeadLetterMailbox);
+            
+            actor.Underlying.AsInstanceOf<ActorCell>().Mailbox.ShouldBe(Sys.Mailboxes.DeadLetterMailbox);
         }
 
         [Fact]
@@ -78,6 +79,17 @@ namespace Akka.Tests.Actor
             ExpectMsg(msg);
             _terminal.Tell(PoisonPill.Instance);
             ExpectTerminationOf(_terminal);
+        }
+
+        [Fact]
+        public void DeathWatch_must_notify_with_one_custom_termination_message_when_actor_is_stopped()
+        {
+            const string msg = "hello";
+            const string terminationMsg = "watchee terminated";
+            StartWatchingWith(_terminal, terminationMsg).Tell(msg);
+            ExpectMsg(msg);
+            _terminal.Tell(PoisonPill.Instance);
+            ExpectMsg(terminationMsg);
         }
 
         [Fact]
@@ -132,7 +144,7 @@ namespace Akka.Tests.Actor
                 var terminal = t1.Result as LocalActorRef;
                 var t2 = supervisor.Ask(CreateWatchAndForwarderProps(terminal, TestActor), timeout);
                 t2.Wait(timeout);
-                var monitor = t2.Result as ActorRef;
+                var monitor = t2.Result as IActorRef;
 
                 terminal.Tell(Kill.Instance);
                 terminal.Tell(Kill.Instance);
@@ -158,8 +170,8 @@ namespace Akka.Tests.Actor
                 var strategy = new FailedSupervisorStrategy(TestActor);
                 _supervisor = Sys.ActorOf(Props.Create(() => new Supervisor(strategy)).WithDeploy(Deploy.Local));
 
-                var failed = _supervisor.Ask(Props.Empty).Result as ActorRef;
-                var brother = _supervisor.Ask(Props.Create(() => new BrotherActor(failed))).Result as ActorRef;
+                var failed = _supervisor.Ask(Props.Empty).Result as IActorRef;
+                var brother = _supervisor.Ask(Props.Create(() => new BrotherActor(failed))).Result as IActorRef;
 
                 StartWatching(brother);
 
@@ -177,7 +189,7 @@ namespace Akka.Tests.Actor
                     return res.ToString();
                 }, 3);
 
-                ((InternalActorRef)TestActor).IsTerminated.ShouldBe(false);
+                ((IInternalActorRef)TestActor).IsTerminated.ShouldBe(false);
                 result.ShouldOnlyContainInOrder("1", "2", "3");
             });
         }
@@ -197,7 +209,7 @@ namespace Akka.Tests.Actor
         public void DeathWatch_must_notify_only_when_watching()
         {
             var subject = Sys.ActorOf(Props.Create(() => new EchoActor(_terminal)));
-            TestActor.Tell(new DeathWatchNotification(subject, true, false));
+            ((IInternalActorRef)TestActor).SendSystemMessage(new DeathWatchNotification(subject, true, false));
             ExpectNoMsg(TimeSpan.FromSeconds(3));
         }
 
@@ -230,26 +242,38 @@ namespace Akka.Tests.Actor
             ExpectMsg<ActorIdentity>(ai => ai.Subject == w);
         }
 
-        private void ExpectTerminationOf(ActorRef actorRef)
+        private void ExpectTerminationOf(IActorRef actorRef)
         {
             ExpectMsg<WrappedTerminated>(w => ReferenceEquals(w.Terminated.ActorRef, actorRef));
         }
 
-        private ActorRef StartWatching(ActorRef target)
+        private IActorRef StartWatching(IActorRef target)
         {
             var task = _supervisor.Ask(CreateWatchAndForwarderProps(target, TestActor), TimeSpan.FromSeconds(3));
             task.Wait(TimeSpan.FromSeconds(3));
-            return (ActorRef)task.Result;
+            return (IActorRef)task.Result;
         }
 
-        private Props CreateWatchAndForwarderProps(ActorRef target, ActorRef forwardToActor)
+        private IActorRef StartWatchingWith(IActorRef target, object message)
+        {
+            var task = _supervisor.Ask(CreateWatchWithAndForwarderProps(target, TestActor, message), TimeSpan.FromSeconds(3));
+            task.Wait(TimeSpan.FromSeconds(3));
+            return (IActorRef)task.Result;
+        }
+
+        private Props CreateWatchAndForwarderProps(IActorRef target, IActorRef forwardToActor)
         {
             return Props.Create(() => new WatchAndForwardActor(target, forwardToActor));
         }
 
+        private Props CreateWatchWithAndForwarderProps(IActorRef target, IActorRef forwardToActor, object message)
+        {
+            return Props.Create(() => new WatchWithAndForwardActor(target, forwardToActor, message));
+        }
+
         internal class BrotherActor : ReceiveActor
         {
-            public BrotherActor(ActorRef failed)
+            public BrotherActor(IActorRef failed)
             {
                 Context.Watch(failed);
             }
@@ -257,18 +281,17 @@ namespace Akka.Tests.Actor
 
         internal class FailedSupervisorStrategy : OneForOneStrategy
         {
-            public ActorRef TestActor { get; private set; }
+            public IActorRef TestActor { get; private set; }
 
-            public FailedSupervisorStrategy(ActorRef testActor) : base(DefaultDecider)
+            public FailedSupervisorStrategy(IActorRef testActor) : base(DefaultDecider)
             {
                 TestActor = testActor;
             }
 
-            protected override void ProcessFailure(IActorContext context, bool restart, Exception cause, ChildRestartStats failedChildStats, IReadOnlyCollection<ChildRestartStats> allChildren)
+            protected override void ProcessFailure(IActorContext context, bool restart, IActorRef child, Exception cause, ChildRestartStats stats, IReadOnlyCollection<ChildRestartStats> children)
             {
-                var child = failedChildStats.Child;
-                TestActor.Tell(new FF(new Failed(child, cause, failedChildStats.Uid)), child);
-                base.ProcessFailure(context, restart, cause, failedChildStats, allChildren);
+                TestActor.Tell(new FF(new Failed(child, cause, stats.Uid)), child);
+                base.ProcessFailure(context, restart, child, cause, stats, children);
             }
         }
 
@@ -290,9 +313,9 @@ namespace Akka.Tests.Actor
         }
         internal class KnobActor : ActorBase
         {
-            private readonly ActorRef _testActor;
+            private readonly IActorRef _testActor;
 
-            public KnobActor(ActorRef testActor)
+            public KnobActor(IActorRef testActor)
             {
                 _testActor = testActor;
             }
@@ -313,7 +336,7 @@ namespace Akka.Tests.Actor
                                 if (y.ActorRef == kid)
                                 {
                                     _testActor.Tell(Bonk);
-                                    Context.Unbecome();
+                                    Context.UnbecomeStacked();
                                 }
                             });
                             return true;
@@ -326,9 +349,9 @@ namespace Akka.Tests.Actor
 
         internal class WatchAndUnwatchMonitor : ActorBase
         {
-            private readonly ActorRef _testActor;
+            private readonly IActorRef _testActor;
 
-            public WatchAndUnwatchMonitor(ActorRef terminal, ActorRef testActor)
+            public WatchAndUnwatchMonitor(IActorRef terminal, IActorRef testActor)
             {
                 _testActor = testActor;
                 Context.Watch(terminal);
@@ -366,9 +389,9 @@ namespace Akka.Tests.Actor
 
         internal class WatchAndForwardActor : ActorBase
         {
-            private readonly ActorRef _forwardToActor;
+            private readonly IActorRef _forwardToActor;
 
-            public WatchAndForwardActor(ActorRef watchedActor, ActorRef forwardToActor)
+            public WatchAndForwardActor(IActorRef watchedActor, IActorRef forwardToActor)
             {
                 _forwardToActor = forwardToActor;
                 Context.Watch(watchedActor);
@@ -381,6 +404,23 @@ namespace Akka.Tests.Actor
                     _forwardToActor.Forward(new WrappedTerminated(terminated));
                 else
                     _forwardToActor.Forward(message);
+                return true;
+            }
+        }
+
+        internal class WatchWithAndForwardActor : ActorBase
+        {
+            private readonly IActorRef _forwardToActor;
+
+            public WatchWithAndForwardActor(IActorRef watchedActor, IActorRef forwardToActor, object message)
+            {
+                _forwardToActor = forwardToActor;
+                Context.WatchWith(watchedActor, message);
+            }
+
+            protected override bool Receive(object message)
+            {
+                _forwardToActor.Forward(message);
                 return true;
             }
         }
@@ -408,24 +448,24 @@ namespace Akka.Tests.Actor
 
         internal struct W
         {
-            public W(ActorRef @ref)
+            public W(IActorRef @ref)
                 : this()
             {
                 Ref = @ref;
             }
 
-            public ActorRef Ref { get; private set; }
+            public IActorRef Ref { get; private set; }
         }
 
         internal struct U
         {
-            public U(ActorRef @ref)
+            public U(IActorRef @ref)
                 : this()
             {
                 Ref = @ref;
             }
 
-            public ActorRef Ref { get; private set; }
+            public IActorRef Ref { get; private set; }
         }
         internal struct FF
         {
@@ -438,7 +478,7 @@ namespace Akka.Tests.Actor
             public Failed Fail { get; private set; }
         }
 
-        internal struct Latches : NoSerializationVerificationNeeded
+        internal struct Latches : INoSerializationVerificationNeeded
         {
 
             public Latches(TestLatch t1, TestLatch t2)
@@ -456,9 +496,9 @@ namespace Akka.Tests.Actor
         /// </summary>
         public class EchoActor : UntypedActor
         {
-            private ActorRef _testActor;
+            private IActorRef _testActor;
 
-            public EchoActor(ActorRef testActorRef)
+            public EchoActor(IActorRef testActorRef)
             {
                 _testActor = testActorRef;
             }
@@ -471,3 +511,4 @@ namespace Akka.Tests.Actor
         }
     }
 }
+

@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="IMessageSink.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Akka.Actor;
@@ -38,7 +45,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
         /// 
         /// During instances of when a test run has been successfully started, this method
         /// will wait up to 10 seconds for any <see cref="Actor"/> instances included as part of this
-        /// <see cref="IMessageSink"/> to shutdown, via the <see cref="GracefulStopSupport.GracefulStop(ActorRef, TimeSpan)"/> method.
+        /// <see cref="IMessageSink"/> to shutdown, via the <see cref="GracefulStopSupport.GracefulStop(IActorRef, TimeSpan)"/> method.
         /// </summary>
         Task<bool> Close(ActorSystem context);
 
@@ -57,42 +64,15 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
         /// <summary>
         /// Report that the test runner is terminating the current test in the suite.
         /// </summary>
-        void EndTest();
+        void EndTest(string className, string methodName);
 
         /// <summary>
         /// Report that an individual node has passed its test.
         /// </summary>
         /// <param name="nodeIndex">The Id of the node in the 0-N index.</param>
-        void Success(int nodeIndex);
-
-        /// <summary>
-        /// Report that an individual node has passed its test.
-        /// </summary>
-        /// <param name="nodeIndex">The Id of the node in the 0-N index.</param>
+        /// <param name="nodeRole">The Role of the node.</param>
         /// <param name="message">A string message included with the notification.</param>
-        void Success(int nodeIndex, string message);
-
-        /// <summary>
-        /// Report that an individual node has failed its test.
-        /// </summary>
-        /// <param name="nodeIndex">The Id of the node in the 0-N index.</param>
-        void Fail(int nodeIndex);
-
-        /// <summary>
-        /// Report that an individual node has failed its test.
-        /// </summary>
-        /// <param name="nodeIndex">The Id of the node in the 0-N index.</param>
-        /// <param name="message">A string message included with the notification.</param>
-        void Fail(int nodeIndex, string message);
-
-        /// <summary>
-        /// Report a log message for an individual node.
-        /// </summary>
-        /// <param name="nodeIndex">The Id of the node in the 0-N index.</param>
-        /// <param name="message">A string message included with the notification.</param>
-        /// <param name="logSource">The source of a log message.</param>
-        /// <param name="level">The <see cref="LogLevel"/> of this message.</param>
-        void Log(int nodeIndex, string message,  string logSource, LogLevel level);
+        void Success(int nodeIndex, string nodeRole, string message);
 
         /// <summary>
         /// Report a log message from the MultiNodeTestRunner itself.
@@ -112,3 +92,4 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
         #endregion
     }
 }
+

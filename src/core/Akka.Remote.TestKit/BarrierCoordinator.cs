@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="BarrierCoordinator.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -21,7 +28,7 @@ namespace Akka.Remote.TestKit
     ///
     ///INTERNAL API.
     /// </summary>
-    internal class BarrierCoordinator : FSM<BarrierCoordinator.State, BarrierCoordinator.Data>, LoggingFSM
+    internal class BarrierCoordinator : FSM<BarrierCoordinator.State, BarrierCoordinator.Data>, ILoggingFSM
     {
         #region State types and messages
 
@@ -43,15 +50,15 @@ namespace Akka.Remote.TestKit
 
         public sealed class Data
         {
-            public Data(IEnumerable<Controller.NodeInfo> clients, string barrier, IEnumerable<ActorRef> arrived, Deadline deadline) : 
+            public Data(IEnumerable<Controller.NodeInfo> clients, string barrier, IEnumerable<IActorRef> arrived, Deadline deadline) : 
                 this(clients == null ? ImmutableHashSet.Create<Controller.NodeInfo>() : ImmutableHashSet.Create(clients.ToArray()), 
                 barrier, 
-                arrived == null ? ImmutableHashSet.Create<ActorRef>() : ImmutableHashSet.Create(arrived.ToArray()), 
+                arrived == null ? ImmutableHashSet.Create<IActorRef>() : ImmutableHashSet.Create(arrived.ToArray()), 
                 deadline)
             {
             }
 
-            public Data(ImmutableHashSet<Controller.NodeInfo> clients, string barrier, ImmutableHashSet<ActorRef> arrived, Deadline deadline)
+            public Data(ImmutableHashSet<Controller.NodeInfo> clients, string barrier, ImmutableHashSet<IActorRef> arrived, Deadline deadline)
             {
                 Deadline = deadline;
                 Arrived = arrived;
@@ -63,12 +70,12 @@ namespace Akka.Remote.TestKit
 
             public string Barrier { get; private set; }
 
-            public ImmutableHashSet<ActorRef> Arrived { get; private set; }
+            public ImmutableHashSet<IActorRef> Arrived { get; private set; }
 
             public Deadline Deadline { get; private set; }
 
             public Data Copy(ImmutableHashSet<Controller.NodeInfo> clients = null, string barrier = null,
-                ImmutableHashSet<ActorRef> arrived = null, Deadline deadline = null)
+                ImmutableHashSet<IActorRef> arrived = null, Deadline deadline = null)
             {
                 return new Data(clients ?? Clients, 
                     barrier ?? Barrier,
@@ -84,6 +91,7 @@ namespace Akka.Remote.TestKit
                     && Equals(Deadline, other.Deadline);
             }
 
+            /// <inheritdoc/>
             public override bool Equals(object obj)
             {
                 if (ReferenceEquals(null, obj)) return false;
@@ -91,6 +99,7 @@ namespace Akka.Remote.TestKit
                 return obj is Data && Equals((Data) obj);
             }
 
+            /// <inheritdoc/>
             public override int GetHashCode()
             {
                 unchecked
@@ -103,96 +112,136 @@ namespace Akka.Remote.TestKit
                 }
             }
 
+            /// <summary>
+            /// Compares two specified <see cref="Data"/> for equality.
+            /// </summary>
+            /// <param name="left">The first <see cref="Data"/> used for comparison</param>
+            /// <param name="right">The second <see cref="Data"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="Data"/> are equal; otherwise <c>false</c></returns>
             public static bool operator ==(Data left, Data right)
             {
                 return Equals(left, right);
             }
 
+            /// <summary>
+            /// Compares two specified <see cref="Data"/> for inequality.
+            /// </summary>
+            /// <param name="left">The first <see cref="Data"/> used for comparison</param>
+            /// <param name="right">The second <see cref="Data"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="Data"/> are not equal; otherwise <c>false</c></returns>
             public static bool operator !=(Data left, Data right)
             {
                 return !Equals(left, right);
             }
         }
 
-        public sealed class BarrierTimeout : Exception
+        public sealed class BarrierTimeoutException : Exception
         {
-            public BarrierTimeout(Data barrierData)
-                : base(string.Format("timeout while waiting for barrier '{0}'", barrierData.Barrier))
+            public BarrierTimeoutException(Data barrierData)
+                : base($"timeout while waiting for barrier '{barrierData.Barrier}'")
             {
                 BarrierData = barrierData;
             }
 
             public Data BarrierData { get; private set; }
 
-            private bool Equals(BarrierTimeout other)
+            private bool Equals(BarrierTimeoutException other)
             {
                 return Equals(BarrierData, other.BarrierData);
             }
 
+            /// <inheritdoc/>
             public override bool Equals(object obj)
             {
                 if (ReferenceEquals(null, obj)) return false;
                 if (ReferenceEquals(this, obj)) return true;
-                return obj is BarrierTimeout && Equals((BarrierTimeout) obj);
+                return obj is BarrierTimeoutException && Equals((BarrierTimeoutException) obj);
             }
 
+            /// <inheritdoc/>
             public override int GetHashCode()
             {
                 return (BarrierData != null ? BarrierData.GetHashCode() : 0);
             }
 
-            public static bool operator ==(BarrierTimeout left, BarrierTimeout right)
+            /// <summary>
+            /// Compares two specified <see cref="BarrierTimeoutException"/> for equality.
+            /// </summary>
+            /// <param name="left">The first <see cref="BarrierTimeoutException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="BarrierTimeoutException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="BarrierTimeoutException"/> are equal; otherwise <c>false</c></returns>
+            public static bool operator ==(BarrierTimeoutException left, BarrierTimeoutException right)
             {
                 return Equals(left, right);
             }
 
-            public static bool operator !=(BarrierTimeout left, BarrierTimeout right)
+            /// <summary>
+            /// Compares two specified <see cref="BarrierTimeoutException"/> for inequality.
+            /// </summary>
+            /// <param name="left">The first <see cref="BarrierTimeoutException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="BarrierTimeoutException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="BarrierTimeoutException"/> are not equal; otherwise <c>false</c></returns>
+            public static bool operator !=(BarrierTimeoutException left, BarrierTimeoutException right)
             {
                 return !Equals(left, right);
             }
         }
 
-        public sealed class FailedBarrier : Exception
+        public sealed class FailedBarrierException : Exception
         {
-            public FailedBarrier(Data barrierData)
-                : base(string.Format("failing barrier '{0}'", barrierData.Barrier))
+            public FailedBarrierException(Data barrierData)
+                : base($"failing barrier '{barrierData.Barrier}'")
             {
                 BarrierData = barrierData;
             }
 
             public Data BarrierData { get; private set; }
 
-            private bool Equals(FailedBarrier other)
+            private bool Equals(FailedBarrierException other)
             {
                 return Equals(BarrierData, other.BarrierData);
             }
 
+            /// <inheritdoc/>
             public override bool Equals(object obj)
             {
                 if (ReferenceEquals(null, obj)) return false;
                 if (ReferenceEquals(this, obj)) return true;
-                return obj is FailedBarrier && Equals((FailedBarrier) obj);
+                return obj is FailedBarrierException && Equals((FailedBarrierException) obj);
             }
 
+            /// <inheritdoc/>
             public override int GetHashCode()
             {
                 return (BarrierData != null ? BarrierData.GetHashCode() : 0);
             }
 
-            public static bool operator ==(FailedBarrier left, FailedBarrier right)
+            /// <summary>
+            /// Compares two specified <see cref="FailedBarrierException"/> for equality.
+            /// </summary>
+            /// <param name="left">The first <see cref="FailedBarrierException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="FailedBarrierException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="FailedBarrierException"/> are equal; otherwise <c>false</c></returns>
+            public static bool operator ==(FailedBarrierException left, FailedBarrierException right)
             {
                 return Equals(left, right);
             }
 
-            public static bool operator !=(FailedBarrier left, FailedBarrier right)
+            /// <summary>
+            /// Compares two specified <see cref="FailedBarrierException"/> for inequality.
+            /// </summary>
+            /// <param name="left">The first <see cref="FailedBarrierException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="FailedBarrierException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="FailedBarrierException"/> are not equal; otherwise <c>false</c></returns>
+            public static bool operator !=(FailedBarrierException left, FailedBarrierException right)
             {
                 return !Equals(left, right);
             }
         }
 
-        public sealed class DuplicateNode : Exception
+        public sealed class DuplicateNodeException : Exception
         {
-            public DuplicateNode(Data barrierData, Controller.NodeInfo node)
+            public DuplicateNodeException(Data barrierData, Controller.NodeInfo node)
                 : base(string.Format(node.ToString()))
             {
                 Node = node;
@@ -203,18 +252,20 @@ namespace Akka.Remote.TestKit
 
             public Controller.NodeInfo Node { get; private set; }
 
-            private bool Equals(DuplicateNode other)
+            private bool Equals(DuplicateNodeException other)
             {
                 return Equals(BarrierData, other.BarrierData) && Equals(Node, other.Node);
             }
 
+            /// <inheritdoc/>
             public override bool Equals(object obj)
             {
                 if (ReferenceEquals(null, obj)) return false;
                 if (ReferenceEquals(this, obj)) return true;
-                return obj is DuplicateNode && Equals((DuplicateNode) obj);
+                return obj is DuplicateNodeException && Equals((DuplicateNodeException) obj);
             }
 
+            /// <inheritdoc/>
             public override int GetHashCode()
             {
                 unchecked
@@ -223,21 +274,33 @@ namespace Akka.Remote.TestKit
                 }
             }
 
-            public static bool operator ==(DuplicateNode left, DuplicateNode right)
+            /// <summary>
+            /// Compares two specified <see cref="DuplicateNodeException"/> for equality.
+            /// </summary>
+            /// <param name="left">The first <see cref="DuplicateNodeException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="DuplicateNodeException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="DuplicateNodeException"/> are equal; otherwise <c>false</c></returns>
+            public static bool operator ==(DuplicateNodeException left, DuplicateNodeException right)
             {
                 return Equals(left, right);
             }
 
-            public static bool operator !=(DuplicateNode left, DuplicateNode right)
+            /// <summary>
+            /// Compares two specified <see cref="DuplicateNodeException"/> for inequality.
+            /// </summary>
+            /// <param name="left">The first <see cref="DuplicateNodeException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="DuplicateNodeException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="DuplicateNodeException"/> are not equal; otherwise <c>false</c></returns>
+            public static bool operator !=(DuplicateNodeException left, DuplicateNodeException right)
             {
                 return !Equals(left, right);
             }
         }
 
-        public sealed class WrongBarrier : Exception
+        public sealed class WrongBarrierException : Exception
         {
-            public WrongBarrier(string barrier, ActorRef client, Data barrierData)
-                : base(string.Format("tried"))
+            public WrongBarrierException(string barrier, IActorRef client, Data barrierData)
+                : base($"[{client}] tried to enter '{barrier}' while we were waiting for '{barrierData.Barrier}'")
             {
                 BarrierData = barrierData;
                 Client = client;
@@ -246,22 +309,24 @@ namespace Akka.Remote.TestKit
 
             public string Barrier { get; private set; }
 
-            public ActorRef Client { get; private set; }
+            public IActorRef Client { get; private set; }
 
             public Data BarrierData { get; private set; }
 
-            private bool Equals(WrongBarrier other)
+            private bool Equals(WrongBarrierException other)
             {
                 return string.Equals(Barrier, other.Barrier) && Equals(Client, other.Client) && Equals(BarrierData, other.BarrierData);
             }
 
+            /// <inheritdoc/>
             public override bool Equals(object obj)
             {
                 if (ReferenceEquals(null, obj)) return false;
                 if (ReferenceEquals(this, obj)) return true;
-                return obj is WrongBarrier && Equals((WrongBarrier) obj);
+                return obj is WrongBarrierException && Equals((WrongBarrierException) obj);
             }
 
+            /// <inheritdoc/>
             public override int GetHashCode()
             {
                 unchecked
@@ -273,20 +338,32 @@ namespace Akka.Remote.TestKit
                 }
             }
 
-            public static bool operator ==(WrongBarrier left, WrongBarrier right)
+            /// <summary>
+            /// Compares two specified <see cref="WrongBarrierException"/> for equality.
+            /// </summary>
+            /// <param name="left">The first <see cref="WrongBarrierException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="WrongBarrierException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="WrongBarrierException"/> are equal; otherwise <c>false</c></returns>
+            public static bool operator ==(WrongBarrierException left, WrongBarrierException right)
             {
                 return Equals(left, right);
             }
 
-            public static bool operator !=(WrongBarrier left, WrongBarrier right)
+            /// <summary>
+            /// Compares two specified <see cref="WrongBarrierException"/> for inequality.
+            /// </summary>
+            /// <param name="left">The first <see cref="WrongBarrierException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="WrongBarrierException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="WrongBarrierException"/> are not equal; otherwise <c>false</c></returns>
+            public static bool operator !=(WrongBarrierException left, WrongBarrierException right)
             {
                 return !Equals(left, right);
             }
         }
 
-        public sealed class BarrierEmpty : Exception
+        public sealed class BarrierEmptyException : Exception
         {
-            public BarrierEmpty(Data barrierData, string message)
+            public BarrierEmptyException(Data barrierData, string message)
                 : base(message)
             {
                 BarrierData = barrierData;
@@ -294,38 +371,52 @@ namespace Akka.Remote.TestKit
 
             public Data BarrierData { get; private set; }
 
-            private bool Equals(BarrierEmpty other)
+            private bool Equals(BarrierEmptyException other)
             {
                 return Equals(BarrierData, other.BarrierData);
             }
 
+            /// <inheritdoc/>
             public override bool Equals(object obj)
             {
                 if (ReferenceEquals(null, obj)) return false;
                 if (ReferenceEquals(this, obj)) return true;
-                return obj is BarrierEmpty && Equals((BarrierEmpty) obj);
+                return obj is BarrierEmptyException && Equals((BarrierEmptyException) obj);
             }
 
+            /// <inheritdoc/>
             public override int GetHashCode()
             {
                 return (BarrierData != null ? BarrierData.GetHashCode() : 0);
             }
 
-            public static bool operator ==(BarrierEmpty left, BarrierEmpty right)
+            /// <summary>
+            /// Compares two specified <see cref="BarrierEmptyException"/> for equality.
+            /// </summary>
+            /// <param name="left">The first <see cref="BarrierEmptyException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="BarrierEmptyException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="BarrierEmptyException"/> are equal; otherwise <c>false</c></returns>
+            public static bool operator ==(BarrierEmptyException left, BarrierEmptyException right)
             {
                 return Equals(left, right);
             }
 
-            public static bool operator !=(BarrierEmpty left, BarrierEmpty right)
+            /// <summary>
+            /// Compares two specified <see cref="BarrierEmptyException"/> for inequality.
+            /// </summary>
+            /// <param name="left">The first <see cref="BarrierEmptyException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="BarrierEmptyException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="BarrierEmptyException"/> are not equal; otherwise <c>false</c></returns>
+            public static bool operator !=(BarrierEmptyException left, BarrierEmptyException right)
             {
                 return !Equals(left, right);
             }
         }
 
-        public sealed class ClientLost : Exception
+        public sealed class ClientLostException : Exception
         {
-            public ClientLost(Data barrierData, RoleName client)
-                : base(string.Format("unannounced disconnect of {0}", client))
+            public ClientLostException(Data barrierData, RoleName client)
+                : base($"unannounced disconnect of {client}")
             {
                 Client = client;
                 BarrierData = barrierData;
@@ -335,18 +426,20 @@ namespace Akka.Remote.TestKit
 
             public RoleName Client { get; private set; }
 
-            private bool Equals(ClientLost other)
+            private bool Equals(ClientLostException other)
             {
                 return Equals(BarrierData, other.BarrierData) && Equals(Client, other.Client);
             }
 
+            /// <inheritdoc/>
             public override bool Equals(object obj)
             {
                 if (ReferenceEquals(null, obj)) return false;
                 if (ReferenceEquals(this, obj)) return true;
-                return obj is ClientLost && Equals((ClientLost) obj);
+                return obj is ClientLostException && Equals((ClientLostException) obj);
             }
 
+            /// <inheritdoc/>
             public override int GetHashCode()
             {
                 unchecked
@@ -356,12 +449,24 @@ namespace Akka.Remote.TestKit
                 }
             }
 
-            public static bool operator ==(ClientLost left, ClientLost right)
+            /// <summary>
+            /// Compares two specified <see cref="ClientLostException"/> for equality.
+            /// </summary>
+            /// <param name="left">The first <see cref="ClientLostException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="ClientLostException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="ClientLostException"/> are equal; otherwise <c>false</c></returns>
+            public static bool operator ==(ClientLostException left, ClientLostException right)
             {
                 return Equals(left, right);
             }
 
-            public static bool operator !=(ClientLost left, ClientLost right)
+            /// <summary>
+            /// Compares two specified <see cref="ClientLostException"/> for equality.
+            /// </summary>
+            /// <param name="left">The first <see cref="ClientLostException"/> used for comparison</param>
+            /// <param name="right">The second <see cref="ClientLostException"/> used for comparison</param>
+            /// <returns><c>true</c> if both <see cref="ClientLostException"/> are equal; otherwise <c>false</c></returns>
+            public static bool operator !=(ClientLostException left, ClientLostException right)
             {
                 return !Equals(left, right);
             }
@@ -369,6 +474,9 @@ namespace Akka.Remote.TestKit
 
         #endregion
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BarrierCoordinator"/> class.
+        /// </summary>
         public BarrierCoordinator()
         {
             InitFSM();
@@ -376,7 +484,7 @@ namespace Akka.Remote.TestKit
 
         //this shall be set to true if all subsequent barriers shall fail
         private bool _failed = false;
-        private readonly LoggingAdapter _log = Context.GetLogger();
+        private readonly ILoggingAdapter _log = Context.GetLogger();
 
         protected override void PreRestart(Exception reason, object message) { }
         protected override void PostRestart(Exception reason)
@@ -386,7 +494,7 @@ namespace Akka.Remote.TestKit
 
         protected void InitFSM()
         {
-            StartWith(State.Idle, new Data(ImmutableHashSet.Create<Controller.NodeInfo>(), "", ImmutableHashSet.Create<ActorRef>(), null));
+            StartWith(State.Idle, new Data(ImmutableHashSet.Create<Controller.NodeInfo>(), "", ImmutableHashSet.Create<IActorRef>(), null));
 
             WhenUnhandled(@event =>
             {
@@ -396,7 +504,7 @@ namespace Akka.Remote.TestKit
                 @event.FsmEvent.Match()
                     .With<Controller.NodeInfo>(node =>
                     {
-                        if (clients.Any(x => x.Name == node.Name)) throw new DuplicateNode(@event.StateData, node);
+                        if (clients.Any(x => x.Name == node.Name)) throw new DuplicateNodeException(@event.StateData, node);
                         nextState = Stay().Using(@event.StateData.Copy(clients.Add(node)));
                     })
                     .With<Controller.ClientDisconnected>(disconnected =>
@@ -412,7 +520,7 @@ namespace Akka.Remote.TestKit
                             if (client == null) nextState = Stay();
                             else
                             {
-                                throw new ClientLost(@event.StateData.Copy(clients.Remove(client), arrived:arrived.Where(x => x != client.FSM).ToImmutableHashSet()), disconnected.Name);
+                                throw new ClientLostException(@event.StateData.Copy(clients.Remove(client), arrived:arrived.Where(x => x != client.FSM).ToImmutableHashSet()), disconnected.Name);
                             }
                         }
                     });
@@ -430,10 +538,10 @@ namespace Akka.Remote.TestKit
                         if (_failed)
                             nextState =
                                 Stay().Replying(new ToClient<BarrierResult>(new BarrierResult(barrier.Name, false)));
-                        else if (clients.Select(x => x.FSM).SequenceEqual(new List<ActorRef>() {Sender}))
+                        else if (clients.Select(x => x.FSM).SequenceEqual(new List<IActorRef>() {Sender}))
                             nextState =
                                 Stay().Replying(new ToClient<BarrierResult>(new BarrierResult(barrier.Name, true)));
-                        else if (clients.All(x => x.FSM != Sender))
+                        else if (clients.All(x => !Equals(x.FSM, Sender)))
                             nextState =
                                 Stay().Replying(new ToClient<BarrierResult>(new BarrierResult(barrier.Name, false)));
                         else
@@ -448,8 +556,7 @@ namespace Akka.Remote.TestKit
                     .With<RemoveClient>(client =>
                     {
                         if (clients.Count == 0)
-                            throw new BarrierEmpty(@event.StateData,
-                                string.Format("cannot remove {0}: no client to remove", client.Name));
+                            throw new BarrierEmptyException(@event.StateData, $"cannot remove {client.Name}: no client to remove");
                         nextState =
                             Stay().Using(@event.StateData.Copy(clients.Where(x => x.Name != client.Name).ToImmutableHashSet()));
                     });
@@ -467,15 +574,15 @@ namespace Akka.Remote.TestKit
                     .With<EnterBarrier>(barrier =>
                     {
                         if (barrier.Name != currentBarrier)
-                            throw new WrongBarrier(barrier.Name, Sender, @event.StateData);
-                        var together = clients.Any(x => x.FSM == Sender)
+                            throw new WrongBarrierException(barrier.Name, Sender, @event.StateData);
+                        var together = clients.Any(x => Equals(x.FSM, Sender))
                             ? @event.StateData.Arrived.Add(Sender)
                             : @event.StateData.Arrived;
                         var enterDeadline = GetDeadline(barrier.Timeout);
                         //we only allow the deadlines to get shorter
                         if (enterDeadline.TimeLeft < @event.StateData.Deadline.TimeLeft)
                         {
-                            SetTimer("Timeout", new StateTimeout(), enterDeadline.TimeLeft, false);
+                            SetTimer("Timeout", StateTimeout.Instance, enterDeadline.TimeLeft, false);
                             nextState = HandleBarrier(@event.StateData.Copy(arrived: together, deadline: enterDeadline));
                         }
                         else
@@ -491,17 +598,17 @@ namespace Akka.Remote.TestKit
                         {
                             nextState =
                                 HandleBarrier(@event.StateData.Copy(clients.Remove(removedClient),
-                                    arrived: arrived.Where(x => x != removedClient.FSM).ToImmutableHashSet()));
+                                    arrived: arrived.Where(x => !Equals(x, removedClient.FSM)).ToImmutableHashSet()));
                         }
                     })
                     .With<FailBarrier>(barrier =>
                     {
-                        if(barrier.Name != currentBarrier) throw new WrongBarrier(barrier.Name, Sender, @event.StateData);
-                        throw new FailedBarrier(@event.StateData);
+                        if(barrier.Name != currentBarrier) throw new WrongBarrierException(barrier.Name, Sender, @event.StateData);
+                        throw new FailedBarrierException(@event.StateData);
                     })
                     .With<StateTimeout>(() =>
                     {
-                        throw new BarrierTimeout(@event.StateData);
+                        throw new BarrierTimeoutException(@event.StateData);
                     });
 
                 return nextState;
@@ -509,7 +616,7 @@ namespace Akka.Remote.TestKit
 
             OnTransition((state, nextState) =>
             {
-                if (state == State.Idle && nextState == State.Waiting) SetTimer("Timeout", new StateTimeout(), NextStateData.Deadline.TimeLeft, false);
+                if (state == State.Idle && nextState == State.Waiting) SetTimer("Timeout", StateTimeout.Instance, NextStateData.Deadline.TimeLeft, false);
                 else if(state == State.Waiting && nextState == State.Idle) CancelTimer("Timeout");
             });
 
@@ -531,7 +638,7 @@ namespace Akka.Remote.TestKit
                 }
                 return
                     GoTo(State.Idle)
-                        .Using(data.Copy(barrier: string.Empty, arrived: ImmutableHashSet.Create<ActorRef>()));
+                        .Using(data.Copy(barrier: string.Empty, arrived: ImmutableHashSet.Create<IActorRef>()));
             }
             else
             {
@@ -545,3 +652,4 @@ namespace Akka.Remote.TestKit
         }
     }
 }
+

@@ -1,4 +1,11 @@
-﻿using Akka.Actor;
+﻿//-----------------------------------------------------------------------
+// <copyright file="SimpleClusterListener.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using Akka.Actor;
 using Akka.Cluster;
 using Akka.Event;
 
@@ -6,7 +13,7 @@ namespace Samples.Cluster.Simple
 {
     public class SimpleClusterListener : UntypedActor
     {
-        protected LoggingAdapter Log = Context.GetLogger();
+        protected ILoggingAdapter Log = Context.GetLogger();
         protected Akka.Cluster.Cluster Cluster = Akka.Cluster.Cluster.Get(Context.System);
 
         /// <summary>
@@ -46,6 +53,10 @@ namespace Samples.Cluster.Simple
             {
                 //IGNORE                
             }
+            else if (message is ClusterEvent.CurrentClusterState)
+            {
+                
+            }
             else
             {
                 Unhandled(message);
@@ -53,3 +64,4 @@ namespace Samples.Cluster.Simple
         }
     }
 }
+

@@ -1,10 +1,16 @@
-﻿using System;
-using System.Collections;
+﻿//-----------------------------------------------------------------------
+// <copyright file="RemoteTransport.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
+using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Event;
-using System.Runtime.Serialization;
 
 namespace Akka.Remote
 {
@@ -19,13 +25,24 @@ namespace Akka.Remote
     /// </summary>
     public abstract class RemoteTransport
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="system">TBD</param>
+        /// <param name="provider">TBD</param>
         protected RemoteTransport(ExtendedActorSystem system, RemoteActorRefProvider provider)
         {
             System = system;
             Provider = provider;
         }
 
-        protected ExtendedActorSystem System { get; private set; }
+        /// <summary>
+        /// TBD
+        /// </summary>
+        public ExtendedActorSystem System { get; private set; }
+        /// <summary>
+        /// TBD
+        /// </summary>
         public RemoteActorRefProvider Provider { get; private set; }
 
         /// <summary>
@@ -43,12 +60,15 @@ namespace Akka.Remote
         /// When true, some functionality will be turned off for security purposes
         /// </summary>
         protected bool UseUntrustedMode { get; set; }
+        /// <summary>
+        /// TBD
+        /// </summary>
         public bool logRemoteLifeCycleEvents { get; protected set; }
 
         /// <summary>
         /// A logger that can be used to log issues that may occur
         /// </summary>
-        public LoggingAdapter Log { get; protected set; }
+        public ILoggingAdapter Log { get; protected set; }
 
         /// <summary>
         /// Start up the transport, i.e. enable incoming connections
@@ -62,9 +82,12 @@ namespace Akka.Remote
         public abstract Task Shutdown();
 
         /// <summary>
-        /// Sends the given message to the recipient, supplying <see cref="sender"/> if any.
+        /// Sends the given message to the recipient, supplying <paramref name="sender"/> if any.
         /// </summary>
-        public abstract void Send(object message, ActorRef sender, RemoteActorRef recipient);
+        /// <param name="message">TBD</param>
+        /// <param name="sender">TBD</param>
+        /// <param name="recipient">TBD</param>
+        public abstract void Send(object message, IActorRef sender, RemoteActorRef recipient);
 
         /// <summary>
         /// Sends a management command to the underlying transport stack. The call returns with a Task that
@@ -91,19 +114,32 @@ namespace Akka.Remote
     }
 
     /// <summary>
-    /// Represents a general failure within a <see cref="RemoteTransport"/>, such as
-    /// the inabiltiy to start, wrong configuration, etc...
+    /// This exception is thrown when a general failure within a <see cref="RemoteTransport"/> occurs, such as
+    /// the inability to start, wrong configuration, etc...
     /// </summary>
     public class RemoteTransportException : AkkaException
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RemoteTransportException"/> class.
+        /// </summary>
+        /// <param name="message">The message that describes the error.</param>
+        /// <param name="cause">The exception that is the cause of the current exception.</param>
         public RemoteTransportException(string message, Exception cause = null)
             : base(message, cause)
         {
         }
 
+#if SERIALIZATION
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RemoteTransportException"/> class.
+        /// </summary>
+        /// <param name="info">The <see cref="SerializationInfo"/> that holds the serialized object data about the exception being thrown.</param>
+        /// <param name="context">The <see cref="StreamingContext"/> that contains contextual information about the source or destination.</param>
         protected RemoteTransportException(SerializationInfo info, StreamingContext context)
             : base(info, context)
         {
         }
+#endif
     }
 }
+

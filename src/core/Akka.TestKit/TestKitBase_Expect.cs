@@ -1,14 +1,23 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="TestKitBase_Expect.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
-using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.TestKit.Internal;
+using Akka.Util;
 
 namespace Akka.TestKit
 {
+    /// <summary>
+    /// TBD
+    /// </summary>
     public abstract partial class TestKitBase
     {
         /// <summary>
@@ -18,6 +27,10 @@ namespace Akka.TestKit
         /// block, if inside a 'within' block; otherwise by the config value 
         /// "akka.test.single-expect-default".
         /// </summary>
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="duration">TBD</param>
+        /// <param name="hint">TBD</param>
+        /// <returns>TBD</returns>
         public T ExpectMsg<T>(TimeSpan? duration = null, string hint = null)
         {
             return InternalExpectMsg<T>(RemainingOrDilated(duration), (Action<T>)null, hint);
@@ -31,6 +44,11 @@ namespace Akka.TestKit
         /// block, if inside a 'within' block; otherwise by the config value 
         /// "akka.test.single-expect-default".
         /// </summary>
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="message">TBD</param>
+        /// <param name="timeout">TBD</param>
+        /// <param name="hint">TBD</param>
+        /// <returns>TBD</returns>
         public T ExpectMsg<T>(T message, TimeSpan? timeout = null, string hint = null)
         {
             return InternalExpectMsg<T>(RemainingOrDilated(timeout), m => _assertions.AssertEqual(message, m), hint);
@@ -46,6 +64,11 @@ namespace Akka.TestKit
         /// block, if inside a 'within' block; otherwise by the config value 
         /// "akka.test.single-expect-default".
         /// </summary>
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="isMessage">TBD</param>
+        /// <param name="timeout">TBD</param>
+        /// <param name="hint">TBD</param>
+        /// <returns>TBD</returns>
         public T ExpectMsg<T>(Predicate<T> isMessage, TimeSpan? timeout = null, string hint = null)
         {
             return InternalExpectMsg<T>(RemainingOrDilated(RemainingOrDilated(timeout)), (m, sender) =>
@@ -66,6 +89,11 @@ namespace Akka.TestKit
         /// block, if inside a 'within' block; otherwise by the config value 
         /// "akka.test.single-expect-default".
         /// </summary>
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="assert">TBD</param>
+        /// <param name="timeout">TBD</param>
+        /// <param name="hint">TBD</param>
+        /// <returns>TBD</returns>
         public T ExpectMsg<T>(Action<T> assert, TimeSpan? timeout = null, string hint = null)
         {
             return InternalExpectMsg(RemainingOrDilated(timeout), assert, hint);
@@ -81,7 +109,12 @@ namespace Akka.TestKit
         /// block, if inside a 'within' block; otherwise by the config value 
         /// "akka.test.single-expect-default".
         /// </summary>
-        public T ExpectMsg<T>(Func<T, ActorRef, bool> isMessageAndSender, TimeSpan? timeout = null, string hint = null)
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="isMessageAndSender">TBD</param>
+        /// <param name="timeout">TBD</param>
+        /// <param name="hint">TBD</param>
+        /// <returns>TBD</returns>
+        public T ExpectMsg<T>(Func<T, IActorRef, bool> isMessageAndSender, TimeSpan? timeout = null, string hint = null)
         {
             return InternalExpectMsg<T>(RemainingOrDilated(RemainingOrDilated(timeout)), (m, sender) =>
             {
@@ -99,7 +132,12 @@ namespace Akka.TestKit
         /// block, if inside a 'within' block; otherwise by the config value 
         /// "akka.test.single-expect-default".
         /// </summary>
-        public T ExpectMsg<T>(Action<T, ActorRef> assertMessageAndSender, TimeSpan? timeout = null, string hint = null)
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="assertMessageAndSender">TBD</param>
+        /// <param name="timeout">TBD</param>
+        /// <param name="hint">TBD</param>
+        /// <returns>TBD</returns>
+        public T ExpectMsg<T>(Action<T, IActorRef> assertMessageAndSender, TimeSpan? timeout = null, string hint = null)
         {
             return InternalExpectMsg<T>(RemainingOrDilated(RemainingOrDilated(timeout)), assertMessageAndSender, hint);
         }
@@ -113,17 +151,15 @@ namespace Akka.TestKit
         /// block, if inside a 'within' block; otherwise by the config value 
         /// "akka.test.single-expect-default".
         /// </summary>
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="expected">TBD</param>
+        /// <param name="comparer">TBD</param>
+        /// <param name="timeout">TBD</param>
+        /// <param name="hint">TBD</param>
+        /// <returns>TBD</returns>
         public T ExpectMsg<T>(T expected, Func<T, T, bool> comparer, TimeSpan? timeout = null, string hint = null)
         {
             return InternalExpectMsg<T>(RemainingOrDilated(timeout), actual => _assertions.AssertEqual(expected, actual, comparer, hint), hint);
-        }
-
-        public T ExpectMsgPf<T>(string hint, Func<object, T> pf)
-        {
-            var t = ExpectMsg<T>();
-            //TODO: Check if this really is needed:
-            _assertions.AssertTrue(pf.Method.GetParameters().Any(x => x.ParameterType.IsInstanceOfType(t)), string.Format("expected {0} but got {1} instead", hint, t));
-            return pf.Invoke(t);
         }
 
         /// <summary>
@@ -133,11 +169,18 @@ namespace Akka.TestKit
         /// wait time is bounded by remaining time for execution of the innermost enclosing 'within'
         /// block, if inside a 'within' block; otherwise by the config value 
         /// "akka.test.single-expect-default".
-        /// </summary>       
-        public Terminated ExpectTerminated(ActorRef target, TimeSpan? timeout = null, string hint = null)
+        /// </summary>
+        /// <param name="target">TBD</param>
+        /// <param name="timeout">TBD</param>
+        /// <param name="hint">TBD</param>
+        /// <returns>TBD</returns>
+        public Terminated ExpectTerminated(IActorRef target, TimeSpan? timeout = null, string hint = null)
         {
-            var msg = string.Format("Terminated {0}. {1}", target.Path, hint ?? "");
-            return InternalExpectMsg<Terminated>(RemainingOrDilated(timeout), terminated => _assertions.AssertEqual(target, terminated.ActorRef, msg), msg);
+            var msg = string.Format("Terminated {0}. {1}", target, hint ?? "");
+            return InternalExpectMsg<Terminated>(RemainingOrDilated(timeout), terminated =>
+            {
+                _assertions.AssertEqual(target, terminated.ActorRef, msg);
+            }, msg);
         }
 
 
@@ -157,23 +200,23 @@ namespace Akka.TestKit
             return (T)envelope.Message;
         }
 
-        private T InternalExpectMsg<T>(TimeSpan? timeout, Action<T> msgAssert, Action<ActorRef> senderAssert, string hint)
+        private T InternalExpectMsg<T>(TimeSpan? timeout, Action<T> msgAssert, Action<IActorRef> senderAssert, string hint)
         {
             var envelope = InternalExpectMsgEnvelope<T>(timeout, msgAssert, senderAssert, hint);
             return (T)envelope.Message;
         }
 
-        private T InternalExpectMsg<T>(TimeSpan? timeout, Action<T, ActorRef> assert, string hint)
+        private T InternalExpectMsg<T>(TimeSpan? timeout, Action<T, IActorRef> assert, string hint)
         {
             var envelope = InternalExpectMsgEnvelope<T>(timeout, assert, hint);
             return (T)envelope.Message;
         }
 
-        private MessageEnvelope InternalExpectMsgEnvelope<T>(TimeSpan? timeout, Action<T> msgAssert, Action<ActorRef> senderAssert, string hint)
+        private MessageEnvelope InternalExpectMsgEnvelope<T>(TimeSpan? timeout, Action<T> msgAssert, Action<IActorRef> senderAssert, string hint)
         {
             msgAssert = msgAssert ?? (m => { });
             senderAssert = senderAssert ?? (sender => { });
-            Action<T, ActorRef> combinedAssert = (m, sender) =>
+            Action<T, IActorRef> combinedAssert = (m, sender) =>
             {
                 senderAssert(sender);
                 msgAssert(m);
@@ -182,7 +225,7 @@ namespace Akka.TestKit
             return envelope;
         }
 
-        private MessageEnvelope InternalExpectMsgEnvelope<T>(TimeSpan? timeout, Action<T, ActorRef> assert, string hint, bool shouldLog=false)
+        private MessageEnvelope InternalExpectMsgEnvelope<T>(TimeSpan? timeout, Action<T, IActorRef> assert, string hint, bool shouldLog=false)
         {
             MessageEnvelope envelope;
             ConditionalLog(shouldLog, "Expecting message of type {0}. {1}", typeof(T), hint);
@@ -226,9 +269,19 @@ namespace Akka.TestKit
         /// <summary>
         /// Assert that no message is received for the specified time.
         /// </summary>
+        /// <param name="duration">TBD</param>
         public void ExpectNoMsg(TimeSpan duration)
         {
             InternalExpectNoMsg(Dilated(duration));
+        }
+
+        /// <summary>
+        /// Assert that no message is received for the specified time in milliseconds.
+        /// </summary>
+        /// <param name="milliseconds">TBD</param>
+        public void ExpectNoMsg(int milliseconds)
+        {
+            ExpectNoMsg(TimeSpan.FromMilliseconds(milliseconds));
         }
 
         private void InternalExpectNoMsg(TimeSpan duration)
@@ -248,17 +301,39 @@ namespace Akka.TestKit
         }
 
         /// <summary>
+        /// Receive a message from the test actor and assert that it equals 
+        /// one of the given <paramref name="messages"/>. Wait time is bounded by 
+        /// <see cref="RemainingOrDefault"/> as duration, with an assertion exception being thrown in case of timeout.
+        /// </summary>
+        /// <typeparam name="T">The type of the messages</typeparam>
+        /// <param name="messages">The messages.</param>
+        /// <returns>The received messages in received order</returns>
+        public T ExpectMsgAnyOf<T>(params T[] messages)
+        {
+            return InternalExpectMsgAnyOf<T>(RemainingOrDefault, messages);
+        }
+
+        private T InternalExpectMsgAnyOf<T>(TimeSpan max, T[] messages)
+        {
+            var o = ReceiveOne(max);
+            _assertions.AssertTrue(o != null, string.Format("Timeout {0} during waiting for ExpectMsgAnyOf waiting for ({1})", max, StringFormat.SafeJoin(",", messages)));
+            _assertions.AssertTrue(messages.Contains((T)o), "ExpectMsgAnyOf found unexpected {0}", o);
+
+            return (T)o;
+        }
+
+        /// <summary>
         /// Receive a number of messages from the test actor matching the given
         /// number of objects and assert that for each given object one is received
         /// which equals it and vice versa. This construct is useful when the order in
         /// which the objects are received is not fixed. Wait time is bounded by 
         /// <see cref="RemainingOrDefault"/> as duration, with an assertion exception being thrown in case of timeout.
         /// 
-        /// <pre>
+        /// <code>
         ///   dispatcher.Tell(SomeWork1())
         ///   dispatcher.Tell(SomeWork2())
         ///   ExpectMsgAllOf(TimeSpan.FromSeconds(1), Result1(), Result2())
-        /// </pre>
+        /// </code>
         /// </summary>
         /// <typeparam name="T">The type of the messages</typeparam>
         /// <param name="messages">The messages.</param>
@@ -276,11 +351,11 @@ namespace Akka.TestKit
         /// which the objects are received is not fixed. Wait time is bounded by the
         /// given duration, with an assertion exception being thrown in case of timeout.
         /// 
-        /// <pre>
+        /// <code>
         ///   dispatcher.Tell(SomeWork1())
         ///   dispatcher.Tell(SomeWork2())
         ///   ExpectMsgAllOf(TimeSpan.FromSeconds(1), Result1(), Result2())
-        /// </pre>
+        /// </code>
         /// The deadline is scaled by "akka.test.timefactor" using <see cref="Dilated"/>.
         /// </summary>
         /// <typeparam name="T">The type of the messages</typeparam>
@@ -329,9 +404,9 @@ namespace Akka.TestKit
 
         private void ConditionalLog(string format, params object[] args)
         {
-            if (_testKitSettings.LogTestKitCalls)
+            if (_testState.TestKitSettings.LogTestKitCalls)
             {
-                _log.Debug(format, args);
+                _testState.Log.Debug(format, args);
             }
         }
     }

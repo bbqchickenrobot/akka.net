@@ -1,3 +1,10 @@
+﻿//-----------------------------------------------------------------------
+// <copyright file="TestCoordinatorEnabledMessageSink.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
 using System.Threading.Tasks;
 using Akka.Actor;
@@ -11,7 +18,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
     /// </summary>
     public abstract class TestCoordinatorEnabledMessageSink : MessageSinkActor
     {
-        protected ActorRef TestCoordinatorActorRef;
+        protected IActorRef TestCoordinatorActorRef;
         protected bool UseTestCoordinator;
 
         protected TestCoordinatorEnabledMessageSink(bool useTestCoordinator)
@@ -21,14 +28,15 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
             {
                 if (UseTestCoordinator)
                 {
+                    var sender = Sender;
                     TestCoordinatorActorRef.Ask<TestRunTree>(new TestRunCoordinator.RequestTestRunState())
                         .ContinueWith(task =>
                         {
                             return new SinkCoordinator.RecommendedExitCode(task.Result.Passed.GetValueOrDefault(false)
                                 ? 0
                                 : 1);
-                        }, TaskContinuationOptions.ExecuteSynchronously & TaskContinuationOptions.AttachedToParent)
-                            .PipeTo(Sender, Self);
+                        }, TaskContinuationOptions.ExecuteSynchronously)
+                            .PipeTo(sender, Self);
                 }
             });
         }
@@ -66,18 +74,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
             if (UseTestCoordinator)
             {
                 var nodeMessage = new MultiNodeLogMessageFragment(logMessage.When.Ticks, logMessage.Message,
-                   logMessage.NodeIndex);
-
-                TestCoordinatorActorRef.Tell(nodeMessage);
-            }
-        }
-
-        protected override void HandleNodeMessage(LogMessageForNode logMessage)
-        {
-            if (UseTestCoordinator)
-            {
-                var nodeMessage = new MultiNodeLogMessage(logMessage.When.Ticks, logMessage.Message,
-                logMessage.NodeIndex, logMessage.LogSource, logMessage.Level);
+                   logMessage.NodeIndex, logMessage.NodeRole);
 
                 TestCoordinatorActorRef.Tell(nodeMessage);
             }
@@ -99,7 +96,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
             if (UseTestCoordinator)
             {
                 var nodeMessage = new MultiNodeResultMessage(DateTime.UtcNow.Ticks, nodeSuccess.Message,
-                    nodeSuccess.NodeIndex, true);
+                    nodeSuccess.NodeIndex, nodeSuccess.NodeRole, true);
 
                 TestCoordinatorActorRef.Tell(nodeMessage);
             }
@@ -110,7 +107,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
             if (UseTestCoordinator)
             {
                 var nodeMessage = new MultiNodeResultMessage(DateTime.UtcNow.Ticks, nodeFail.Message,
-                    nodeFail.NodeIndex, false);
+                    nodeFail.NodeIndex, nodeFail.NodeRole, false);
 
                 TestCoordinatorActorRef.Tell(nodeMessage);
             }
@@ -126,7 +123,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
                     {
                         var testRunTree = tr.Result;
                         return new BeginSinkTerminate(testRunTree, sender);
-                    }, TaskContinuationOptions.AttachedToParent & TaskContinuationOptions.ExecuteSynchronously)
+                    }, TaskContinuationOptions.ExecuteSynchronously)
                     .PipeTo(Self);
             }
         }
@@ -138,3 +135,4 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
         }
     }
 }
+

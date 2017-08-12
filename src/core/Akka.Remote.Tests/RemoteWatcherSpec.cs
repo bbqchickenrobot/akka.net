@@ -1,8 +1,16 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="RemoteWatcherSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using Akka.Actor;
 using Akka.TestKit;
 using Akka.Util.Internal;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Akka.Remote.Tests
 {
@@ -10,9 +18,9 @@ namespace Akka.Remote.Tests
     {
         class TestActorProxy : UntypedActor
         {
-            readonly ActorRef _testActor;
+            readonly IActorRef _testActor;
 
-            public TestActorProxy(ActorRef TestActor)
+            public TestActorProxy(IActorRef TestActor)
             {
                 _testActor = TestActor;
             }
@@ -92,22 +100,35 @@ namespace Akka.Remote.Tests
                     get { return _uid; }
                 }
 
+                protected bool Equals(Quarantined other)
+                {
+                    return Equals(_address, other._address) && _uid == other._uid;
+                }
+
                 public override bool Equals(object obj)
                 {
-                    var other = obj as Quarantined;
-                    if (other == null) return false;
-                    return _address.Equals(other._address); //TODO: Ignoring uid? /&& _uid == other._uid;
+                    if (ReferenceEquals(null, obj)) return false;
+                    if (ReferenceEquals(this, obj)) return true;
+                    if (obj.GetType() != this.GetType()) return false;
+                    return Equals((Quarantined) obj);
                 }
 
                 public override int GetHashCode()
                 {
                     unchecked
                     {
-                        var hash = 17;
-                        hash = hash*23 + _address.GetHashCode();
-                        //TODO: Ignoring uid hash = hash*23 + _uid.GetHashCode();
-                        return hash;
+                        return ((_address != null ? _address.GetHashCode() : 0)*397) ^ _uid.GetHashCode();
                     }
+                }
+
+                public static bool operator ==(Quarantined left, Quarantined right)
+                {
+                    return Equals(left, right);
+                }
+
+                public static bool operator !=(Quarantined left, Quarantined right)
+                {
+                    return !Equals(left, right);
                 }
             }
 
@@ -138,17 +159,17 @@ namespace Akka.Remote.Tests
             }
         }
 
-        public RemoteWatcherSpec()
+        public RemoteWatcherSpec(ITestOutputHelper output)
             : base(@"
             akka {
                 loglevel = INFO 
                 log-dead-letters-during-shutdown = false
                 actor.provider = ""Akka.Remote.RemoteActorRefProvider, Akka.Remote""
-                remote.helios.tcp = {
+                remote.dot-netty.tcp = {
                     hostname = localhost
                     port = 0
                 }
-            }")
+            }", output)
         {
             _remoteSystem = ActorSystem.Create("RemoteSystem", Sys.Settings.Config);
             _remoteAddress = _remoteSystem.AsInstanceOf<ExtendedActorSystem>().Provider.DefaultAddress;
@@ -178,23 +199,23 @@ namespace Akka.Remote.Tests
             get { return AddressUidExtension.Uid(_remoteSystem); }
         }
 
-        private ActorRef CreateRemoteActor(Props props, string name)
+        private IInternalActorRef CreateRemoteActor(Props props, string name)
         {
             _remoteSystem.ActorOf(props, name);
             Sys.ActorSelection(new RootActorPath(_remoteAddress) / "user" / name).Tell(new Identify(name), TestActor);
-            return ExpectMsg<ActorIdentity>().Subject;
+            return ExpectMsg<ActorIdentity>().Subject.AsInstanceOf<IInternalActorRef>();
         }
 
         [Fact]
-        public void ARemoteWatcherMustHaveCorrectInteractionWhenWatching()
+        public void A_RemoteWatcher_must_have_correct_interaction_when_watching()
         {
             var fd = CreateFailureDetectorRegistry();
             var monitorA = Sys.ActorOf(Props.Create<TestRemoteWatcher>(), "monitor1");
             //TODO: Better way to write this?
             var monitorB = CreateRemoteActor(new Props(new Deploy(), typeof(TestActorProxy), new[]{TestActor}), "monitor1");
 
-            var a1 = Sys.ActorOf(Props.Create<MyActor>(), "a1");
-            var a2 = Sys.ActorOf(Props.Create<MyActor>(), "a2");
+            var a1 = Sys.ActorOf(Props.Create<MyActor>(), "a1").AsInstanceOf<IInternalActorRef>();
+            var a2 = Sys.ActorOf(Props.Create<MyActor>(), "a2").AsInstanceOf<IInternalActorRef>();
             var b1 = CreateRemoteActor(Props.Create<MyActor>(), "b1");
             var b2 = CreateRemoteActor(Props.Create<MyActor>(), "b2");
 
@@ -202,9 +223,8 @@ namespace Akka.Remote.Tests
             monitorA.Tell(new RemoteWatcher.WatchRemote(b2, a1));
             monitorA.Tell(new RemoteWatcher.WatchRemote(b2, a2));
             monitorA.Tell(RemoteWatcher.Stats.Empty, TestActor);
-            // for each watchee the RemoteWatcher also adds its own watch: 5 = 3 + 2
             // (a1->b1), (a1->b2), (a2->b2)
-            ExpectMsg(RemoteWatcher.Stats.Counts(5, 1));
+            ExpectMsg(RemoteWatcher.Stats.Counts(3, 1));
             ExpectNoMsg(TimeSpan.FromMilliseconds(100));
             monitorA.Tell(RemoteWatcher.HeartbeatTick.Instance, TestActor);
             ExpectMsg<RemoteWatcher.Heartbeat>();
@@ -220,7 +240,7 @@ namespace Akka.Remote.Tests
             monitorA.Tell(new RemoteWatcher.UnwatchRemote(b1, a1));
             // still (a1->b2) and (a2->b2) left
             monitorA.Tell(RemoteWatcher.Stats.Empty, TestActor);
-            ExpectMsg(RemoteWatcher.Stats.Counts(3, 1));
+            ExpectMsg(RemoteWatcher.Stats.Counts(2, 1));
             ExpectNoMsg(TimeSpan.FromMilliseconds(100));
             monitorA.Tell(RemoteWatcher.HeartbeatTick.Instance, TestActor);
             ExpectMsg<RemoteWatcher.Heartbeat>();
@@ -229,7 +249,7 @@ namespace Akka.Remote.Tests
             monitorA.Tell(new RemoteWatcher.UnwatchRemote(b2, a2));
             // still (a1->b2) left
             monitorA.Tell(RemoteWatcher.Stats.Empty, TestActor);
-            ExpectMsg(RemoteWatcher.Stats.Counts(2, 1));
+            ExpectMsg(RemoteWatcher.Stats.Counts(1, 1));
             ExpectNoMsg(TimeSpan.FromMilliseconds(100));
             monitorA.Tell(RemoteWatcher.HeartbeatTick.Instance, TestActor);
             ExpectMsg<RemoteWatcher.Heartbeat>();
@@ -250,7 +270,7 @@ namespace Akka.Remote.Tests
         }
 
         [Fact]
-        public void ARemoteWatcherMustGenerateAddressTerminatedWhenMissingHeartbeats()
+        public void A_RemoteWatcher_must_generate_address_terminated_when_missing_heartbeats()
         {
             var p = CreateTestProbe();
             var q = CreateTestProbe();
@@ -260,7 +280,7 @@ namespace Akka.Remote.Tests
             var monitorA = Sys.ActorOf(Props.Create<TestRemoteWatcher>(), "monitor4");
             var monitorB = CreateRemoteActor(new Props(new Deploy(), typeof(TestActorProxy), new[] { TestActor }), "monitor4");
 
-            var a = Sys.ActorOf(Props.Create<MyActor>(), "a4");
+            var a = Sys.ActorOf(Props.Create<MyActor>(), "a4").AsInstanceOf<IInternalActorRef>();
             var b = CreateRemoteActor(Props.Create<MyActor>(), "b4");
 
             monitorA.Tell(new RemoteWatcher.WatchRemote(b, a));
@@ -291,7 +311,7 @@ namespace Akka.Remote.Tests
         }
 
         [Fact]
-        public void ARemoteWatcherMustGenerateAddressTerminatedWhenMissingFirstHeartbeat()
+        public void A_RemoteWatcher_must_generate_address_terminated_when_missing_first_heartbeat()
         {
             var p = CreateTestProbe();
             var q = CreateTestProbe();
@@ -303,7 +323,7 @@ namespace Akka.Remote.Tests
             var monitorA = Sys.ActorOf(new Props(new Deploy(), typeof(TestRemoteWatcher), new object[] {heartbeatExpectedResponseAfter}), "monitor5");
             var monitorB = CreateRemoteActor(new Props(new Deploy(), typeof(TestActorProxy), new[] { TestActor }), "monitor5");
 
-            var a = Sys.ActorOf(Props.Create<MyActor>(), "a5");
+            var a = Sys.ActorOf(Props.Create<MyActor>(), "a5").AsInstanceOf<IInternalActorRef>();
             var b = CreateRemoteActor(Props.Create<MyActor>(), "b5");
 
             monitorA.Tell(new RemoteWatcher.WatchRemote(b, a));
@@ -332,7 +352,7 @@ namespace Akka.Remote.Tests
 
         [Fact]
         public void
-            ARemoteWatcherMustGenerateAddressTerminatedForNewWatchAfterBrokenConnectionWasReestablishedAndBrokenAgain()
+            A_RemoteWatcher_must_generate_address_terminated_for_new_watch_after_broken_connection_was_reestablished_and_broken_again()
         {
             var p = CreateTestProbe();
             var q = CreateTestProbe();
@@ -342,7 +362,7 @@ namespace Akka.Remote.Tests
             var monitorA = Sys.ActorOf(Props.Create<TestRemoteWatcher>(), "monitor6");
             var monitorB = CreateRemoteActor(new Props(new Deploy(), typeof(TestActorProxy), new[] { TestActor }), "monitor6");
 
-            var a = Sys.ActorOf(Props.Create<MyActor>(), "a6");
+            var a = Sys.ActorOf(Props.Create<MyActor>(), "a6").AsInstanceOf<IInternalActorRef>();
             var b = CreateRemoteActor(Props.Create<MyActor>(), "b6");
 
             monitorA.Tell(new RemoteWatcher.WatchRemote(b, a));
@@ -423,3 +443,4 @@ namespace Akka.Remote.Tests
 
     }
 }
+

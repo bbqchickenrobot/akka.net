@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="CustomEventFilter.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using Akka.Event;
 
 namespace Akka.TestKit.Internal
@@ -10,17 +17,29 @@ namespace Akka.TestKit.Internal
     {
         private readonly Predicate<LogEvent> _predicate;
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="predicate">TBD</param>
         public CustomEventFilter(Predicate<LogEvent> predicate)
             : base(null, null)
         {
             _predicate = predicate;
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="evt">TBD</param>
+        /// <returns>TBD</returns>
         protected override bool IsMatch(LogEvent evt)
         {
             return _predicate(evt);
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         protected override string FilterDescriptiveName { get { return "Custom"; } }
     }
 }

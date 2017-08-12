@@ -1,19 +1,21 @@
-﻿using Akka.Actor;
-using Akka.Actor.Internals;
-using Akka.Configuration;
-using Akka.TestKit;
+﻿//-----------------------------------------------------------------------
+// <copyright file="LocalActorRefProviderSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
+using Akka.Actor;
+using Akka.Actor.Internal;
+using Akka.TestKit;
 using Xunit;
-using Xunit.Extensions;
+using Akka.TestKit.TestActors;
 
 namespace Akka.Tests.Actor
 {
-    using Akka.TestKit.TestActors;
-
     public class LocalActorRefProviderSpec : AkkaSpec
     {
         [Fact]
@@ -21,7 +23,7 @@ namespace Akka.Tests.Actor
         {
             var parent = Sys.ActorOf(Props.Create(() => new ParentActor()));
             parent.Tell("GetChild", TestActor);
-            var child = ExpectMsg<ActorRef>();
+            var child = ExpectMsg<IActorRef>();
             var childPropsBeforeTermination = ((LocalActorRef)child).Underlying.Props;
             Assert.Equal(Props.Empty, childPropsBeforeTermination);
             Watch(parent);
@@ -85,14 +87,14 @@ namespace Akka.Tests.Actor
                 {
                     Sys.ActorOf(Props.Empty, name);
                 });
-            Assert.Contains(expectedExceptionMessageSubstring, exception.Message, StringComparison.InvariantCultureIgnoreCase);
+            Assert.Contains(expectedExceptionMessageSubstring, exception.Message, StringComparison.OrdinalIgnoreCase);
         }
 
         private class ActorWithDuplicateChild : ActorBase
         {
             protected override bool Receive(object message)
             {
-                if (message == "")
+                if (message as string == "")
                 {
                     var a = Context.ActorOf(Props.Empty, "duplicate");
                     var b = Context.ActorOf(Props.Empty, "duplicate");
@@ -104,7 +106,7 @@ namespace Akka.Tests.Actor
 
         private class ParentActor : ActorBase
         {
-            private readonly ActorRef childActorRef;
+            private readonly IActorRef childActorRef;
 
             public ParentActor()
             {
@@ -113,7 +115,7 @@ namespace Akka.Tests.Actor
 
             protected override bool Receive(object message)
             {
-                if (message == "GetChild")
+                if (message as string == "GetChild")
                 {
                     Sender.Tell(this.childActorRef);
                     return true;
@@ -123,3 +125,4 @@ namespace Akka.Tests.Actor
         }
     }
 }
+

@@ -1,21 +1,27 @@
+ï»¿//-----------------------------------------------------------------------
+// <copyright file="Cell.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using Akka.Actor.Internal;
-using Akka.Actor.Internals;
+using Akka.Dispatch.SysMsg;
 
 namespace Akka.Actor
 {
-    // ReSharper disable once InconsistentNaming
     /// <summary>
     /// <remarks>Note! Part of internal API. Breaking changes may occur without notice. Use at own risk.</remarks>
     /// </summary>
-    public interface Cell
+    public interface ICell
     {
-        /// <summary>Gets the “self” reference which this Cell is attached to.</summary>
-        ActorRef Self { get; }
+        /// <summary>Gets the "self" reference which this Cell is attached to.</summary>
+        IActorRef Self { get; }
 
         /// <summary>The system within which this Cell lives.</summary>
-        ActorSystem System { get; }        
+        ActorSystem System { get; }
         
         /// <summary>The system internals within which this Cell lives.</summary>
         ActorSystemImpl SystemImpl{ get; }
@@ -30,9 +36,11 @@ namespace Akka.Actor
         void Suspend();
 
         /// <summary>Recursively resume this actor and all its children. Is only allowed to throw fatal exceptions.</summary>
+        /// <param name="causedByFailure">TBD</param>
         void Resume(Exception causedByFailure);
 
         /// <summary>Restart this actor (will recursively restart or stop all children). Is only allowed to throw Fatal Throwables.</summary>
+        /// <param name="cause">TBD</param>
         void Restart(Exception cause);
 
 
@@ -41,7 +49,7 @@ namespace Akka.Actor
 
 
         /// <summary>The supervisor of this actor.</summary>
-        InternalActorRef Parent { get; }
+        IInternalActorRef Parent { get; }
 
         /// <summary>Returns true if the actor is local.</summary>
         bool IsLocal { get; }
@@ -62,29 +70,62 @@ namespace Akka.Actor
         /// </summary>
         int NumberOfMessages { get; }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         bool IsTerminated { get; }
 
-        void Post(ActorRef sender, object message);
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="sender">TBD</param>
+        /// <param name="message">TBD</param>
+        void SendMessage(IActorRef sender, object message);
 
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <returns>TBD</returns>
+        [Obsolete("Used ChildrenRefs instead [1.1.0]")]
+        IEnumerable<IInternalActorRef> GetChildren();    //TODO: Should be replaced by childrenRefs: ChildrenContainer
 
-        IEnumerable<InternalActorRef> GetChildren();    //TODO: Should be replaced by childrenRefs: ChildrenContainer
+        /// <summary>
+        /// TBD
+        /// </summary>
+        IChildrenContainer ChildrenContainer { get; }
 
         /// <summary>
         /// Method for looking up a single child beneath this actor.
-        /// It is racy if called from the outside.</summary>
-        InternalActorRef GetSingleChild(string name);
+        /// It is racy if called from the outside.
+        /// </summary>
+        /// <param name="name">TBD</param>
+        /// <returns>TBD</returns>
+        IInternalActorRef GetSingleChild(string name);
 
-        InternalActorRef GetChildByName(string name);
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="name">TBD</param>
+        /// <returns>TBD</returns>
+        IInternalActorRef GetChildByName(string name);
 
         /// <summary>
         /// Tries to get the stats for the child with the specified name. The stats can be either <see cref="ChildNameReserved"/> 
         /// indicating that only a name has been reserved for the child, or a <see cref="ChildRestartStats"/> for a child that 
         /// has been initialized/created.
         /// </summary>
-        bool TryGetChildStatsByName(string name, out ChildStats child); //This is called getChildByName in Akka JVM
+        /// <param name="name">TBD</param>
+        /// <param name="child">TBD</param>
+        /// <returns>TBD</returns>
+        bool TryGetChildStatsByName(string name, out IChildStats child); //This is called getChildByName in Akka JVM
 
-
+        /// <summary>
+        /// Enqueue a message to be sent to the actor; may or may not actually
+        /// schedule the actor to run, depending on which type of cell it is.
+        /// </summary>
+        /// <param name="message">The system message we're passing along</param>
+        void SendSystemMessage(ISystemMessage message);
 
         // TODO: Missing:
         //    /**
@@ -120,12 +161,6 @@ namespace Akka.Actor
         //    */
         //    final def sendMessage(message: Any, sender: ActorRef): Unit =
         //    sendMessage(Envelope(message, sender, system))
-
-        //    /**
-        //    * Enqueue a message to be sent to the actor; may or may not actually
-        //    * schedule the actor to run, depending on which type of cell it is.
-        //    * Is only allowed to throw Fatal Throwables.
-        //    */
-        //    def sendSystemMessage(msg: SystemMessage): Unit
     }
 }
+

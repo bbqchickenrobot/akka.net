@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="AccrualFailureDetectorSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Akka.TestKit;
@@ -7,7 +14,7 @@ using Xunit;
 
 namespace Akka.Remote.Tests
 {
-    
+
     public class AccrualFailureDetectorSpec : AkkaSpec
     {
         public static IEnumerable<Tuple<T, T>> Slide<T>(IEnumerable<T> values)
@@ -61,7 +68,7 @@ namespace Akka.Remote.Tests
                 ShouldBe(fd.Phi(kv.Key, 1000.0, 100.0), kv.Value, 0.1);
             }
 
-            //larger stdDeviation reuslts => lower phi
+            //larger stdDeviation results => lower phi
             Assert.True(fd.Phi(1100, 1000.0, 500.0) < fd.Phi(1100, 1000.0, 100.0));
         }
 
@@ -238,6 +245,59 @@ namespace Akka.Remote.Tests
             ShouldBe(history5.Variance, 688.88888889D, 0.00001D);
         }
 
+
+        // handle an edge case when the Clock rolls over
+        // see https://github.com/akkadotnet/akka.net/issues/2581
+        [Fact]
+        public void PhiAccrualHistory_can_roll_over()
+        {
+            unchecked
+            {
+                var absoluteTimes = new List<long>
+                {
+                    (Int64.MaxValue - 300),
+                    (Int64.MaxValue - 200),
+                    (Int64.MaxValue - 100),
+                    (Int64.MaxValue),
+                    (Int64.MaxValue + 100),
+                    (Int64.MaxValue + 200),
+                    (Int64.MaxValue + 300),
+                };
+
+                // compute intervals
+                var timeIntervals = new List<long>();
+
+                for (var i = 0; i < absoluteTimes.Count-1; i++)
+                {
+                    timeIntervals.Add(absoluteTimes[i+1] - absoluteTimes[i]);
+                }
+
+                var fd =
+                    FailureDetectorSpecHelpers.CreateFailureDetector(
+                        FailureDetectorSpecHelpers.FakeTimeGenerator(timeIntervals));
+                foreach (var i in timeIntervals)
+                {
+                    fd.HeartBeat();
+                    Assert.True(fd.IsAvailable);
+                }
+            }
+        }
+
+        [Fact]
+        public void PhiAccrualHistory_must_work_with_MonotonicClock()
+        {
+            var fd =
+                   FailureDetectorSpecHelpers.CreateFailureDetector();
+
+            Assert.True(fd.IsAvailable);
+            fd.HeartBeat();
+            Assert.True(fd.IsAvailable);
+            fd.HeartBeat();
+            fd.HeartBeat();
+            fd.HeartBeat();
+            Assert.True(fd.IsAvailable);
+        }
+
         /// <summary>
         /// Uses an epsilon value to compare between floating point numbers.
         /// Uses a default epsilon value of 0.001d
@@ -304,3 +364,4 @@ namespace Akka.Remote.Tests
         }
     }
 }
+

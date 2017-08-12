@@ -1,3 +1,10 @@
+﻿//-----------------------------------------------------------------------
+// <copyright file="ErrorFilter.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
 using Akka.Event;
 using Akka.TestKit.Internal.StringMatcher;
@@ -13,19 +20,39 @@ namespace Akka.TestKit.Internal
         private readonly Type _exceptionType;
         private readonly bool _recurseInnerExceptions;
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="messageMatcher">TBD</param>
+        /// <param name="sourceMatcher">TBD</param>
         public ErrorFilter(IStringMatcher messageMatcher = null, IStringMatcher sourceMatcher = null)
             : this(null,messageMatcher,sourceMatcher, false)
         {
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="exceptionType">TBD</param>
+        /// <param name="messageMatcher">TBD</param>
+        /// <param name="sourceMatcher">TBD</param>
+        /// <param name="recurseInnerExceptions">TBD</param>
+        /// <exception cref="ArgumentException">
+        /// This exception is thrown when the specified <paramref name="exceptionType"/> does not implement <see cref="Exception"/>.
+        /// </exception>
         public ErrorFilter(Type exceptionType, IStringMatcher messageMatcher = null, IStringMatcher sourceMatcher = null, bool recurseInnerExceptions=false)
             : base(messageMatcher,sourceMatcher)
         {
-            if(exceptionType!=null && !exceptionType.Implements<Exception>()) throw new ArgumentException("The type must be an exception. It was: " + exceptionType, "exceptionType");
+            if(exceptionType!=null && !exceptionType.Implements<Exception>()) throw new ArgumentException($"The type must be an exception. It was: {exceptionType}", nameof(exceptionType));
             _exceptionType = exceptionType;
             _recurseInnerExceptions = recurseInnerExceptions;
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="evt">TBD</param>
+        /// <returns>TBD</returns>
         protected override bool IsMatch(LogEvent evt)
         {
             var error = evt as Error;
@@ -76,6 +103,9 @@ namespace Akka.TestKit.Internal
                    || (_recurseInnerExceptions && IsMatch(logSource, errorMessage, cause.InnerException));
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         protected override string FilterDescriptiveName
         {
             get

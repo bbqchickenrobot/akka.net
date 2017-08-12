@@ -1,5 +1,11 @@
-﻿using System;
-using System.Diagnostics;
+﻿//-----------------------------------------------------------------------
+// <copyright file="PersistentViewSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using Akka.Actor;
 using Akka.TestKit;
 using Xunit;
@@ -8,13 +14,13 @@ namespace Akka.Persistence.Tests
 {
     public partial class PersistentViewSpec : PersistenceSpec
     {
-        protected ActorRef _pref;
-        protected ActorRef _view;
+        protected IActorRef _pref;
+        protected IActorRef _view;
         protected TestProbe _prefProbe;
         protected TestProbe _viewProbe;
 
         public PersistentViewSpec()
-            : base(Configuration("inmem", "PersistentViewSpec"))
+            : base(Configuration("PersistentViewSpec"))
         {
             _prefProbe = CreateTestProbe();
             _viewProbe = CreateTestProbe();
@@ -86,7 +92,7 @@ namespace Akka.Persistence.Tests
             _viewProbe.ExpectMsg("replicated-b-2");
             _pref.Tell("c");
             _prefProbe.ExpectMsg("c-3");
-            _view.Tell(new Update(isAwait: false));
+            _view.Tell(new Update(isAwait: true));
             _view.Tell("get");
             _viewProbe.ExpectMsg("replicated-c-3");
         }
@@ -102,7 +108,7 @@ namespace Akka.Persistence.Tests
             _viewProbe.ExpectMsg("replicated-b-2");
         }
 
-        [Fact(Skip = "FIXME")]
+        [Fact]
         public void PersistentView_should_run_updates_again_on_failure_during_an_update_cycle()
         {
             _pref.Tell("c");
@@ -114,7 +120,7 @@ namespace Akka.Persistence.Tests
             _viewProbe.ExpectMsg("replicated-c-3");
         }
 
-        [Fact(Skip = "FIXME")]
+        [Fact(Skip = "FIXME: working, but random timeouts can occur when running all tests at once")]
         public void PersistentView_should_run_size_limited_updates_on_user_request()
         {
             _pref.Tell("c");
@@ -126,6 +132,7 @@ namespace Akka.Persistence.Tests
             _prefProbe.ExpectMsg("e-5");
             _prefProbe.ExpectMsg("f-6");
 
+            //TODO: performance optimization 
             _view = ActorOf(() => new PassiveTestPersistentView(Name, _viewProbe.Ref, null));
             _view.Tell(new Update(isAwait: true, replayMax: 2));
             _view.Tell("get");
@@ -157,7 +164,7 @@ namespace Akka.Persistence.Tests
             _viewProbe.ExpectMsg("replicated-b-2");
             _viewProbe.ExpectMsg("replicated-c-3");
             _viewProbe.ExpectMsg("replicated-d-4");
-            
+
             replayProbe.ExpectMsg<ReplayMessages>(m => m.FromSequenceNr == 1L && m.Max == 2L);
             replayProbe.ExpectMsg<ReplayMessages>(m => m.FromSequenceNr == 3L && m.Max == 2L);
             replayProbe.ExpectMsg<ReplayMessages>(m => m.FromSequenceNr == 5L && m.Max == 2L);
@@ -203,6 +210,17 @@ namespace Akka.Persistence.Tests
             _pref.Tell("c");
             _viewProbe.ExpectMsg("replicated-b-2");
             _viewProbe.ExpectMsg("replicated-c-3");
+        }
+
+        [Fact]
+        public void PersistentView_should_support_stash()
+        {
+            _view = ActorOf(() => new StashingPersistentView(Name, _viewProbe.Ref));
+            _view.Tell("other");
+            _view.Tell("unstash");
+            _viewProbe.ExpectMsg("a-2"); // note that the LastSequenceNr is 2, since we have replayed b-2
+            _viewProbe.ExpectMsg("b-2");
+            _viewProbe.ExpectMsg("other-2");
         }
 
         private void SubscribeToReplay(TestProbe probe)

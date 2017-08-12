@@ -1,18 +1,35 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ChildStats.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
+using Akka.Util;
 
 namespace Akka.Actor.Internal
 {
-    // ReSharper disable once InconsistentNaming
-    public interface ChildStats
+    /// <summary>
+    /// TBD
+    /// </summary>
+    public interface IChildStats
     {
     }
 
-    public class ChildNameReserved : ChildStats
+    /// <summary>
+    /// TBD
+    /// </summary>
+    public class ChildNameReserved : IChildStats
     {
         private static readonly ChildNameReserved _instance = new ChildNameReserved();
         private ChildNameReserved() {/* Intentionally left blank */}
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public static ChildNameReserved Instance { get { return _instance; } }
+        /// <inheritdoc/>
         public override string ToString()
         {
             return "Name Reserved";
@@ -23,27 +40,51 @@ namespace Akka.Actor.Internal
     /// ChildRestartStats is the statistics kept by every parent Actor for every child Actor
     /// and is used for SupervisorStrategies to know how to deal with problems that occur for the children.
     /// </summary>
-    public class ChildRestartStats : ChildStats
+    public class ChildRestartStats : IChildStats
     {
-        private readonly InternalActorRef _child;
+        private readonly IInternalActorRef _child;
         private uint _maxNrOfRetriesCount;
         private long _restartTimeWindowStartTicks;
 
-        public ChildRestartStats(InternalActorRef child, uint maxNrOfRetriesCount = 0, long restartTimeWindowStartTicks = 0)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="child">TBD</param>
+        /// <param name="maxNrOfRetriesCount">TBD</param>
+        /// <param name="restartTimeWindowStartTicks">TBD</param>
+        public ChildRestartStats(IInternalActorRef child, uint maxNrOfRetriesCount = 0, long restartTimeWindowStartTicks = 0)
         {
             _child = child;
             _maxNrOfRetriesCount = maxNrOfRetriesCount;
             _restartTimeWindowStartTicks = restartTimeWindowStartTicks;
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public long Uid { get { return Child.Path.Uid; } }
 
-        public InternalActorRef Child { get { return _child; } }
+        /// <summary>
+        /// TBD
+        /// </summary>
+        public IInternalActorRef Child { get { return _child; } }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public uint MaxNrOfRetriesCount { get { return _maxNrOfRetriesCount; } }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public long RestartTimeWindowStartTicks { get { return _restartTimeWindowStartTicks; } }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="maxNrOfRetries">TBD</param>
+        /// <param name="withinTimeMilliseconds">TBD</param>
+        /// <returns>TBD</returns>
         public bool RequestRestartPermission(int maxNrOfRetries, int withinTimeMilliseconds)
         {
             if (maxNrOfRetries == 0) return false;
@@ -73,7 +114,7 @@ namespace Akka.Actor.Internal
             // after a restart and if enough restarts happen during this time, it
             // denies. Otherwise window closes and the scheme starts over.
             var retriesDone = _maxNrOfRetriesCount + 1;
-            var now = DateTime.Now.Ticks;
+            var now = MonotonicClock.Elapsed.Ticks;
             long windowStart;
             if (_restartTimeWindowStartTicks == 0)
             {
@@ -96,7 +137,5 @@ namespace Akka.Actor.Internal
             _restartTimeWindowStartTicks = now;
             return true;
         }
-
-
     }
 }

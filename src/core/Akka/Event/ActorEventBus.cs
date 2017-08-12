@@ -1,18 +1,20 @@
-﻿using Akka.Actor;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ActorEventBus.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using Akka.Actor;
 
 namespace Akka.Event
 {
     /// <summary>
-    /// Class ActorEventBus.
+    /// This class represents an <see cref="EventBus{TEvent,TClassifier,TSubscriber}"/> where the subscriber type is an <see cref="IActorRef"/>.
     /// </summary>
-    /// <typeparam name="TEvent">The type of the t event.</typeparam>
-    /// <typeparam name="TClassifier">The type of the t classifier.</typeparam>
-    public abstract class ActorEventBus<TEvent, TClassifier> : EventBus<TEvent, TClassifier, ActorRef>
+    /// <typeparam name="TEvent">The type of event published to the bus.</typeparam>
+    /// <typeparam name="TClassifier">The type of classifier used to classify events.</typeparam>
+    public abstract class ActorEventBus<TEvent, TClassifier> : EventBus<TEvent, TClassifier, IActorRef>
     {
     }
 }

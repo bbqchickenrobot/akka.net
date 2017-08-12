@@ -1,5 +1,13 @@
-﻿using System;
-using System.Threading;
+﻿//-----------------------------------------------------------------------
+// <copyright file="BuiltInActors.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
+using System.Collections.Generic;
+using Akka.Dispatch;
 using Akka.Dispatch.SysMsg;
 using Akka.Event;
 
@@ -14,6 +22,7 @@ namespace Akka.Actor
         ///     Processor for user defined messages.
         /// </summary>
         /// <param name="message">The message.</param>
+        /// <returns>TBD</returns>
         protected override bool Receive(object message)
         {
             return true;
@@ -23,8 +32,13 @@ namespace Akka.Actor
     /// <summary>
     ///     Class GuardianActor.
     /// </summary>
-    public class GuardianActor : ActorBase
+    public class GuardianActor : ActorBase, IRequiresMessageQueue<IUnboundedMessageQueueSemantics>
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="message">TBD</param>
+        /// <returns>TBD</returns>
         protected override bool Receive(object message)
         {
             if(message is Terminated)
@@ -35,24 +49,43 @@ namespace Akka.Actor
                 Context.System.DeadLetters.Tell(new DeadLetter(message, Sender, Self), Sender);
             return true;
         }
+
+        /// <summary>
+        /// TBD
+        /// </summary>
+        protected override void PreStart()
+        {
+            // guardian MUST NOT lose its children during restart
+        }
     }
 
-    public class SystemGuardianActor : ActorBase
+    /// <summary>
+    /// System guardian. 
+    /// 
+    /// Root actor for all actors under the /system path.
+    /// </summary>
+    public class SystemGuardianActor : ActorBase, IRequiresMessageQueue<IUnboundedMessageQueueSemantics>
     {
-        private readonly ActorRef _userGuardian;
+        private readonly IActorRef _userGuardian;
+        private readonly HashSet<IActorRef> _terminationHooks;
 
-        public SystemGuardianActor(ActorRef userGuardian)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="userGuardian">TBD</param>
+        public SystemGuardianActor(IActorRef userGuardian)
         {
             _userGuardian = userGuardian;
+            _terminationHooks = new HashSet<IActorRef>();
         }
 
         /// <summary>
         /// Processor for messages that are sent to the root system guardian
         /// </summary>
-        /// <param name="message"></param>
+        /// <param name="message">TBD</param>
+        /// <returns>TBD</returns>
         protected override bool Receive(object message)
         {
-            //TODO need to add termination hook support
             var terminated = message as Terminated;
             if(terminated != null)
             {
@@ -63,24 +96,21 @@ namespace Akka.Actor
                     // termination hooks, they will reply with TerminationHookDone
                     // and when all are done the systemGuardian is stopped
                     Context.Become(Terminating);
-                    //TODO: Send TerminationHook to all registered termination hooks
-                    //foreach(var terminationHook in _terminationHooks)
-                    //{
-                    //    terminationHook.Tell(terminationHook.Instance);
-                    //}
+                    foreach(var terminationHook in _terminationHooks)
+                    {
+                        terminationHook.Tell(TerminationHook.Instance);
+                    }
                     StopWhenAllTerminationHooksDone();
                 }
                 else
                 {
                     // a registered, and watched termination hook terminated before
                     // termination process of guardian has started
-                    //TODO: Implement termination hook support
-                    //_terminationHooks.Remove(terminatedActor)
+                    _terminationHooks.Remove(terminatedActor);
                 }
                 return true;
             }
-
-
+            
             var stopChild = message as StopChild;
             if(stopChild != null)
             {
@@ -88,14 +118,14 @@ namespace Akka.Actor
                 return true;
             }
             var sender = Sender;
-            //TODO: Implement termination hook support
-            //var registerTerminationHook = message as RegisterTerminationHook;
-            //if(registerTerminationHook != null && !ReferenceEquals(sender, Context.System.DeadLetters))
-            //{
-            //    _terminationHooks.Add(sender);
-            //    Context.Watch(sender);
-            //    return true;
-            //}
+            
+            var registerTerminationHook = message as RegisterTerminationHook;
+            if(registerTerminationHook != null && !ReferenceEquals(sender, Context.System.DeadLetters))
+            {
+                _terminationHooks.Add(sender);
+                Context.Watch(sender);
+                return true;
+            }
             Context.System.DeadLetters.Tell(new DeadLetter(message, sender, Self), sender);
             return true;
         }
@@ -109,28 +139,26 @@ namespace Akka.Actor
                 return true;
             }
             var sender = Sender;
-            //TODO: Implement termination hook support
-            //var terminationHookDone = message as TerminationHookDone;
-            //if(terminationHookDone != null)
-            //{
-            //    StopWhenAllTerminationHooksDone(sender);
-            //    return true;
-            //}
+
+            var terminationHookDone = message as TerminationHookDone;
+            if(terminationHookDone != null)
+            {
+                StopWhenAllTerminationHooksDone(sender);
+                return true;
+            }
             Context.System.DeadLetters.Tell(new DeadLetter(message, sender, Self), sender);
             return true;
         }
 
-        private void StopWhenAllTerminationHooksDone(ActorRef remove)
+        private void StopWhenAllTerminationHooksDone(IActorRef terminatedActor)
         {
-            //TODO: Implement termination hook support
-            //_terminationHooks.Remove(terminatedActor)
+            _terminationHooks.Remove(terminatedActor);
             StopWhenAllTerminationHooksDone();
         }
 
         private void StopWhenAllTerminationHooksDone()
         {
-            //TODO: Implement termination hook support
-            //if(_terminationHooks.Count == 0)
+            if(_terminationHooks.Count == 0)
             {
                 var actorSystem = Context.System;
                 actorSystem.EventStream.StopDefaultLoggers(actorSystem);
@@ -138,6 +166,11 @@ namespace Akka.Actor
             }
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="reason">TBD</param>
+        /// <param name="message">TBD</param>
         protected override void PreRestart(Exception reason, object message)
         {
             //Guardian MUST NOT lose its children during restart
@@ -152,28 +185,56 @@ namespace Akka.Actor
     {
         private readonly EventStream _eventStream;
 
-        public DeadLetterActorRef(ActorRefProvider provider, ActorPath path, EventStream eventStream)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="provider">TBD</param>
+        /// <param name="path">TBD</param>
+        /// <param name="eventStream">TBD</param>
+        public DeadLetterActorRef(IActorRefProvider provider, ActorPath path, EventStream eventStream)
             : base(provider, path, eventStream)
         {
             _eventStream = eventStream;
         }
 
-        //TODO: Since this isn't overriding SendUserMessage it doesn't handle all messages as Akka JVM does
-
-        protected override void HandleDeadLetter(DeadLetter deadLetter)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="message">TBD</param>
+        /// <param name="sender">TBD</param>
+        /// <exception cref="InvalidMessageException">This exception is thrown if the given <paramref name="message"/> is undefined.</exception>
+        protected override void TellInternal(object message, IActorRef sender)
         {
-            if(!SpecialHandle(deadLetter.Message, deadLetter.Sender))
-                _eventStream.Publish(deadLetter);
+            if (message == null) throw new InvalidMessageException("Message is null");
+            var i = message as Identify;
+            if (i != null)
+            {
+                sender.Tell(new ActorIdentity(i.MessageId, ActorRefs.Nobody));
+                return;
+            }
+            var d = message as DeadLetter;
+            if (d != null)
+            {
+                if (!SpecialHandle(d.Message, d.Sender)) { _eventStream.Publish(d); }
+                return;
+            }
+            if (!SpecialHandle(message, sender)) { _eventStream.Publish(new DeadLetter(message, sender.IsNobody() ? Provider.DeadLetters : sender, this)); }
         }
 
-        protected override bool SpecialHandle(object message, ActorRef sender)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="message">TBD</param>
+        /// <param name="sender">TBD</param>
+        /// <returns>TBD</returns>
+        protected override bool SpecialHandle(object message, IActorRef sender)
         {
             var w = message as Watch;
-            if(w != null)
+            if (w != null)
             {
-                if(w.Watchee != this && w.Watcher != this)
+                if (!w.Watchee.Equals(this) && !w.Watcher.Equals(this))
                 {
-                    w.Watcher.Tell(new DeathWatchNotification(w.Watchee, existenceConfirmed: false, addressTerminated: false));
+                    w.Watcher.SendSystemMessage(new DeathWatchNotification(w.Watchee, existenceConfirmed: false, addressTerminated: false));
                 }
                 return true;
             }
@@ -181,3 +242,4 @@ namespace Akka.Actor
         }
     }
 }
+

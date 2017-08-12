@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ThrottlerTransportAdapterSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Text.RegularExpressions;
 using Akka.Actor;
 using Akka.Configuration;
@@ -6,10 +13,11 @@ using Akka.Remote.Transport;
 using Akka.TestKit;
 using Akka.TestKit.Internal;
 using Akka.TestKit.Internal.StringMatcher;
-using Akka.TestKit.TestActors;
 using Akka.TestKit.TestEvent;
+using Akka.Util;
 using Akka.Util.Internal;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Akka.Remote.Tests.Transport
 {
@@ -23,15 +31,17 @@ namespace Akka.Remote.Tests.Transport
             {
                 return ConfigurationFactory.ParseString(@"
                 akka {
-                  akka.test.single-expect-default = 6s #to help overcome issues with gated connections
+                  loglevel = ""DEBUG""
+                  stdout-loglevel = ""DEBUG""
+                  test.single-expect-default = 6s #to help overcome issues with gated connections
                   actor.provider = ""Akka.Remote.RemoteActorRefProvider, Akka.Remote""
-                  remote.helios.tcp.hostname = ""localhost""
+                  remote.dot-netty.tcp.hostname = ""localhost""
                   remote.log-remote-lifecycle-events = off
                   remote.retry-gate-closed-for = 1 s
                   remote.transport-failure-detector.heartbeat-interval = 1 s
                   remote.transport-failure-detector.acceptable-heartbeat-pause = 3 s
-                  remote.helios.tcp.applied-adapters = [""trttl""]
-                  remote.helios.tcp.port = 0
+                  remote.dot-netty.tcp.applied-adapters = [""trttl""]
+                  remote.dot-netty.tcp.port = 0
                 }");
             }
         }
@@ -43,14 +53,14 @@ namespace Akka.Remote.Tests.Transport
 
         public class ThrottlingTester : ReceiveActor
         {
-            private ActorRef _remoteRef;
-            private ActorRef _controller;
+            private IActorRef _remoteRef;
+            private IActorRef _controller;
 
             private int _received = 0;
             private int _messageCount = MessageCount;
             private long _startTime = 0L;
 
-            public ThrottlingTester(ActorRef remoteRef, ActorRef controller)
+            public ThrottlingTester(IActorRef remoteRef, IActorRef controller)
             {
                 _remoteRef = remoteRef;
                 _controller = controller;
@@ -58,7 +68,7 @@ namespace Akka.Remote.Tests.Transport
                 Receive<string>(s => s.Equals("start"), s =>
                 {
                     Self.Tell("sendNext");
-                    _startTime = SystemNanoTime.GetNanos();
+                    _startTime = MonotonicClock.GetNanos();
                 });
 
                 Receive<string>(s => s.Equals("sendNext") && _messageCount > 0, s =>
@@ -72,7 +82,7 @@ namespace Akka.Remote.Tests.Transport
                 {
                     _received++;
                     if (_received >= MessageCount)
-                        _controller.Tell(SystemNanoTime.GetNanos() - _startTime);
+                        _controller.Tell(MonotonicClock.GetNanos() - _startTime);
                 });
             }
 
@@ -83,7 +93,7 @@ namespace Akka.Remote.Tests.Transport
                     Msg = msg;
                 }
 
-                public string Msg { get; private set; }
+                public string Msg { get; }
 
                 public bool Equals(Lost other)
                 {
@@ -101,7 +111,12 @@ namespace Akka.Remote.Tests.Transport
 
                 public override int GetHashCode()
                 {
-                    return (Msg != null ? Msg.GetHashCode() : 0);
+                    return Msg?.GetHashCode() ?? 0;
+                }
+
+                public override string ToString()
+                {
+                    return GetType() + ": " + Msg;
                 }
             }
         }
@@ -119,14 +134,14 @@ namespace Akka.Remote.Tests.Transport
         }
 
         private ActorSystem systemB;
-        private ActorRef remote;
+        private IActorRef remote;
 
         private RootActorPath RootB
         {
             get { return new RootActorPath(systemB.AsInstanceOf<ExtendedActorSystem>().Provider.DefaultAddress); }
         }
 
-        private ActorRef Here
+        private IActorRef Here
         {
             get
             {
@@ -157,8 +172,8 @@ namespace Akka.Remote.Tests.Transport
 
         #endregion
 
-        public ThrottlerTransportAdapterSpec()
-            : base(ThrottlerTransportAdapterSpecConfig)
+        public ThrottlerTransportAdapterSpec(ITestOutputHelper output)
+            : base(ThrottlerTransportAdapterSpecConfig, output)
         {
             systemB = ActorSystem.Create("systemB", Sys.Settings.Config);
             remote = systemB.ActorOf(Props.Create<Echo>(), "echo");
@@ -169,7 +184,7 @@ namespace Akka.Remote.Tests.Transport
         [Fact]
         public void ThrottlerTransportAdapter_must_maintain_average_message_rate()
         {
-            Throttle(ThrottleTransportAdapter.Direction.Send, new TokenBucket(PingPacketSize*4, BytesPerSecond, 0, 0)).ShouldBeTrue();
+            Throttle(ThrottleTransportAdapter.Direction.Send, new Remote.Transport.TokenBucket(PingPacketSize*4, BytesPerSecond, 0, 0)).ShouldBeTrue();
             var tester = Sys.ActorOf(Props.Create(() => new ThrottlingTester(Here, TestActor)));
             tester.Tell("start");
 
@@ -193,7 +208,7 @@ namespace Akka.Remote.Tests.Transport
             here.Tell(new ThrottlingTester.Lost("BlackHole 2"));
             ExpectNoMsg(TimeSpan.FromSeconds(1));
             Disassociate().ShouldBeTrue();
-            ExpectNoMsg(TimeSpan.FromSeconds(3));
+            ExpectNoMsg(TimeSpan.FromSeconds(1));
 
             Throttle(ThrottleTransportAdapter.Direction.Both, Unthrottled.Instance).ShouldBeTrue();
 
@@ -205,19 +220,14 @@ namespace Akka.Remote.Tests.Transport
                 var received = ReceiveOne(TimeSpan.Zero);
                 if (received != null && received.Equals(new ThrottlingTester.Lost("BlackHole 3")))
                     return true;
-                else
-                {
-                    here.Tell(new ThrottlingTester.Lost("BlackHole 3"));
-                    return false;
-                }
+
+                here.Tell(new ThrottlingTester.Lost("BlackHole 3"));
+
+                return false;
             }, TimeSpan.FromSeconds(15));
 
             here.Tell("Cleanup");
-            FishForMessage(o =>
-            {
-                if (o.Equals("Cleanup")) return true;
-                return false;
-            }, TimeSpan.FromSeconds(5));
+            FishForMessage(o => o.Equals("Cleanup"), TimeSpan.FromSeconds(5));
         }
 
         #endregion
@@ -243,3 +253,4 @@ namespace Akka.Remote.Tests.Transport
         #endregion
     }
 }
+

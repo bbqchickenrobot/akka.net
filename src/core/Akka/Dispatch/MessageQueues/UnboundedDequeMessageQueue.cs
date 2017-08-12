@@ -1,22 +1,52 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿//-----------------------------------------------------------------------
+// <copyright file="UnboundedDequeMessageQueue.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
+using Akka.Actor;
+using Akka.Configuration;
 
 namespace Akka.Dispatch.MessageQueues
 {
-    public class UnboundedDequeMessageQueue : DequeWrapperMessageQueue, UnboundedDequeBasedMessageQueueSemantics
+    /// <summary>
+    /// An unbounded double-ended queue. Used in combination with <see cref="IStash"/>.
+    /// </summary>
+    public class UnboundedDequeMessageQueue : DequeWrapperMessageQueue, IUnboundedDequeBasedMessageQueueSemantics
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
         public UnboundedDequeMessageQueue() : base(new UnboundedMessageQueue())
         {
         }
     }
-    public class BoundedDequeMessageQueue : DequeWrapperMessageQueue, BoundedDequeBasedMessageQueueSemantics
+
+    /// <summary>
+    /// A bounded double-ended queue. Used in combination with <see cref="IStash"/>.
+    /// </summary>
+    public class BoundedDequeMessageQueue : DequeWrapperMessageQueue, IBoundedDequeBasedMessageQueueSemantics
     {
-        public BoundedDequeMessageQueue()
-            : base(new BoundedMessageQueue())
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="boundedCapacity">TBD</param>
+        /// <param name="pushTimeOut">TBD</param>
+        public BoundedDequeMessageQueue(int boundedCapacity, TimeSpan pushTimeOut)
+            : base(new BoundedMessageQueue(boundedCapacity, pushTimeOut))
         {
+            PushTimeOut = pushTimeOut;
         }
+
+        /// <summary>
+        /// Gets the underlying <see cref="BoundedMessageQueue.PushTimeOut"/> 
+        /// </summary>
+        /// <remarks>
+        /// This method is never called, but had to be implemented to support the <see cref="IBoundedDequeBasedMessageQueueSemantics"/> interface.
+        /// </remarks>
+        public TimeSpan PushTimeOut { get; }
     }
 }
+

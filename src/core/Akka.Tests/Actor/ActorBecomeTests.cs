@@ -1,4 +1,10 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ActorBecomeTests.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using Akka.Actor;
 using Akka.TestKit;
 using Xunit;
@@ -76,6 +82,27 @@ namespace Akka.Tests.Actor
             ExpectMsg("2:hello");
         }
 
+        [Fact]
+        public void Given_actor_that_calls_become_in_the_become_handler_only_first_become_receive_set_is_used() {
+            var system = ActorSystem.Create("test");
+
+            //Given, this actor calls become(A) inside A() it calls Become(B);
+            var actor = system.ActorOf<Become3Actor>("become");
+
+            //only the handler set of A() should be active
+
+            actor.Tell("hi", TestActor);
+            actor.Tell(true, TestActor);
+            
+            //which means this message should never be handled, because only B() has a receive for this.
+            actor.Tell(2, TestActor);
+
+            ExpectMsg("A says: hi");
+            ExpectMsg("A says: True");
+            //we dont expect any further messages
+            this.ExpectNoMsg();
+        }
+
         private class BecomeActor : UntypedActor
         {
             protected override void OnReceive(object message)
@@ -87,7 +114,7 @@ namespace Akka.Tests.Actor
                         Become(OnReceive2);
                         break;
                     case "BECOMESTACKED":
-                        Become(OnReceive2,discardOld: false);
+                        BecomeStacked(OnReceive2);
                         break;
                     default:
                         Sender.Tell("1:" + s, Self);
@@ -101,7 +128,7 @@ namespace Akka.Tests.Actor
                 switch(s)
                 {
                     case "UNBECOME":
-                        Unbecome();
+                        UnbecomeStacked();
                         break;
                     default:
                         Sender.Tell("2:" + s, Self);
@@ -121,7 +148,7 @@ namespace Akka.Tests.Actor
                         Become(OnReceive2);
                         break;
                     case "BECOMESTACKED":
-                        Become(OnReceive2, discardOld: false);
+                        BecomeStacked(OnReceive2);
                         break;
                     default:
                         Sender.Tell("1:" + s, Self);
@@ -138,10 +165,10 @@ namespace Akka.Tests.Actor
                         Become(OnReceive3);
                         break;
                     case "BECOMESTACKED":
-                        Become(OnReceive3, discardOld: false);
+                        BecomeStacked(OnReceive3);
                         break;
                     case "UNBECOME":
-                        Unbecome();
+                        UnbecomeStacked();
                         break;
                     default:
                         Sender.Tell("2:" + s, Self);
@@ -155,7 +182,7 @@ namespace Akka.Tests.Actor
                 switch(s)
                 {
                     case "UNBECOME":
-                        Unbecome();
+                        UnbecomeStacked();
                         break;
                     default:
                         Sender.Tell("3:" + s, Self);
@@ -163,5 +190,39 @@ namespace Akka.Tests.Actor
                 }
             }
         }
+
+        private class Become3Actor : ReceiveActor
+        {
+            public Become3Actor()
+            {
+                Become(A);
+            }
+
+            public void A()
+            {
+                Receive<string>(s => {
+                    Sender.Tell("A says: " + s);
+                });
+                Receive<bool>(s => {
+                    Sender.Tell("A says: " + s);
+                });
+                //calling become before or after setting up the receive handlers makes no difference.
+                Become(B);
+            }
+
+            public void B()
+            {
+                Receive<string>(s => {
+                    Sender.Tell("B says: " + s);
+                });
+                Receive<bool>(s => {
+                    Sender.Tell("B says: " + s);
+                });
+                Receive<int>(s => {
+                    Sender.Tell("B says: " + s);
+                });
+            }
+        }
     }
 }
+

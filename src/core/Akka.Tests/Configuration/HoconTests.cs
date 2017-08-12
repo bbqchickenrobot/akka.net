@@ -1,6 +1,14 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="HoconTests.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Linq;
 using Akka.Configuration;
+using Akka.Configuration.Hocon;
 using Akka.TestKit;
 using Xunit;
 
@@ -8,9 +16,9 @@ namespace Akka.Tests.Configuration
 {
     public class HoconTests
     {
-        //Added tests to conform to the HOCON spec https://github.com/typesafehub/config/blob/master/HOCON.md
+        //Added tests to conform to the HOCON spec https://github.com/Lightbendhub/config/blob/master/HOCON.md
         [Fact]
-        public void CanUsePathsAsKeys_3_14()
+        public void Can_use_paths_as_keys_3_14()
         {
             var hocon1 = @"3.14 : 42";
             var hocon2 = @"3 { 14 : 42}";
@@ -19,7 +27,7 @@ namespace Akka.Tests.Configuration
         }
 
         [Fact]
-        public void CanUsePathsAsKeys_3()
+        public void Can_use_paths_as_keys_3()
         {
             var hocon1 = @"3 : 42";
             var hocon2 = @"""3"" : 42";
@@ -28,7 +36,7 @@ namespace Akka.Tests.Configuration
         }
 
         [Fact]
-        public void CanUsePathsAsKeys_true()
+        public void Can_use_paths_as_keys_true()
         {
             var hocon1 = @"true : 42";
             var hocon2 = @"""true"" : 42";
@@ -37,7 +45,7 @@ namespace Akka.Tests.Configuration
         }
 
         [Fact]
-        public void CanUsePathsAsKeys_FooBar()
+        public void Can_use_paths_as_keys_FooBar()
         {
             var hocon1 = @"foo.bar : 42";
             var hocon2 = @"foo { bar : 42 }";
@@ -46,7 +54,7 @@ namespace Akka.Tests.Configuration
         }
 
         [Fact]
-        public void CanUsePathsAsKeys_FooBarBaz()
+        public void Can_use_paths_as_keys_FooBarBaz()
         {
             var hocon1 = @"foo.bar.baz : 42";
             var hocon2 = @"foo { bar { baz : 42 } }";
@@ -55,7 +63,7 @@ namespace Akka.Tests.Configuration
         }
 
         [Fact]
-        public void CanUsePathsAsKeys_AX_AY()
+        public void Can_use_paths_as_keys_AX_AY()
         {
             var hocon1 = @"a.x : 42, a.y : 43";
             var hocon2 = @"a { x : 42, y : 43 }";
@@ -66,7 +74,7 @@ namespace Akka.Tests.Configuration
         }
 
         [Fact]
-        public void CanUsePathsAsKeys_A_B_C()
+        public void Can_use_paths_as_keys_A_B_C()
         {
             var hocon1 = @"a b c : 42";
             var hocon2 = @"""a b c"" : 42";
@@ -76,7 +84,7 @@ namespace Akka.Tests.Configuration
 
 
         [Fact]
-        public void CanConcatenateSubstitutedUnquotedString()
+        public void Can_concatenate_substituted_unquoted_string()
         {
             var hocon = @"a {
   name = Roger
@@ -86,7 +94,7 @@ namespace Akka.Tests.Configuration
         }
 
         [Fact]
-        public void CanConcatenateSubstitutedArray()
+        public void Can_concatenate_substituted_array()
         {
             var hocon = @"a {
   b = [1,2,3]
@@ -96,7 +104,7 @@ namespace Akka.Tests.Configuration
         }
 
         [Fact]
-        public void CanParseSubConfig()
+        public void Can_parse_sub_config()
         {
             var hocon = @"
 a {
@@ -113,7 +121,7 @@ a {
 
 
         [Fact]
-        public void CanParseHocon()
+        public void Can_parse_hocon()
         {
             var hocon = @"
 root {
@@ -158,7 +166,7 @@ root {
         }
 
         [Fact]
-        public void CanParseJson()
+        public void Can_parse_json()
         {
             var hocon = @"
 ""root"" : {
@@ -184,7 +192,7 @@ root {
         }
 
         [Fact]
-        public void CanMergeObject()
+        public void Can_merge_object()
         {
             var hocon = @"
 a.b.c = {
@@ -202,7 +210,7 @@ a.b.c = {
         }
 
         [Fact]
-        public void CanOverrideObject()
+        public void Can_override_object()
         {
             var hocon = @"
 a.b = 1
@@ -215,7 +223,7 @@ a.c = 3
         }
 
         [Fact]
-        public void CanParseObject()
+        public void Can_parse_object()
         {
             var hocon = @"
 a {
@@ -226,56 +234,56 @@ a {
         }
 
         [Fact]
-        public void CanTrimValue()
+        public void Can_trim_value()
         {
             var hocon = "a= \t \t 1 \t \t,";
             Assert.Equal("1", ConfigurationFactory.ParseString(hocon).GetString("a"));
         }
 
         [Fact]
-        public void CanTrimConcatenatedValue()
+        public void Can_trim_concatenated_value()
         {
             var hocon = "a= \t \t 1 2 3 \t \t,";
             Assert.Equal("1 2 3", ConfigurationFactory.ParseString(hocon).GetString("a"));
         }
 
         [Fact]
-        public void CanConsumeCommaAfterValue()
+        public void Can_consume_comma_after_value()
         {
             var hocon = "a=1,";
             Assert.Equal("1", ConfigurationFactory.ParseString(hocon).GetString("a"));
         }
 
         [Fact]
-        public void CanAssignIpAddressToField()
+        public void Can_assign_ipaddress_to_field()
         {
             var hocon = @"a=127.0.0.1";
             Assert.Equal("127.0.0.1", ConfigurationFactory.ParseString(hocon).GetString("a"));
         }
 
         [Fact]
-        public void CanAssignConcatenatedValueToField()
+        public void Can_assign_concatenated_value_to_field()
         {
             var hocon = @"a=1 2 3";
             Assert.Equal("1 2 3", ConfigurationFactory.ParseString(hocon).GetString("a"));
         }
 
         [Fact]
-        public void CanAssignValueToQuotedField()
+        public void Can_assign_value_to_quoted_field()
         {
             var hocon = @"""a""=1";
             Assert.Equal(1L, ConfigurationFactory.ParseString(hocon).GetLong("a"));
         }
 
         [Fact]
-        public void CanAssignValueToPathExpression()
+        public void Can_assign_value_to_path_expression()
         {
             var hocon = @"a.b.c=1";
             Assert.Equal(1L, ConfigurationFactory.ParseString(hocon).GetLong("a.b.c"));
         }
 
         [Fact]
-        public void CanAssignValuesToPathExpressions()
+        public void Can_assign_values_to_path_expressions()
         {
             var hocon = @"
 a.b.c=1
@@ -289,14 +297,14 @@ a.b.e.f=3
         }
 
         [Fact]
-        public void CanAssignLongToField()
+        public void Can_assign_long_to_field()
         {
             var hocon = @"a=1";
             Assert.Equal(1L, ConfigurationFactory.ParseString(hocon).GetLong("a"));
         }
 
         [Fact]
-        public void CanAssignArrayToField()
+        public void Can_assign_array_to_field()
         {
             var hocon = @"a=
 [
@@ -311,14 +319,14 @@ a.b.e.f=3
         }
 
         [Fact]
-        public void CanConcatenateArray()
+        public void Can_concatenate_array()
         {
             var hocon = @"a=[1,2] [3,4]";
             Assert.True(new[] {1, 2, 3, 4}.SequenceEqual(ConfigurationFactory.ParseString(hocon).GetIntList("a")));
         }
 
         [Fact]
-        public void CanAssignSubstitutionToField()
+        public void Can_assign_substitution_to_field()
         {
             var hocon = @"a{
     b = 1
@@ -330,21 +338,21 @@ a.b.e.f=3
         }
 
         [Fact]
-        public void CanAssignDoubleToField()
+        public void Can_assign_double_to_field()
         {
             var hocon = @"a=1.1";
             Assert.Equal(1.1, ConfigurationFactory.ParseString(hocon).GetDouble("a"));
         }
 
         [Fact]
-        public void CanAssignNullToField()
+        public void Can_assign_null_to_field()
         {
             var hocon = @"a=null";
             Assert.Null(ConfigurationFactory.ParseString(hocon).GetString("a"));
         }
 
         [Fact]
-        public void CanAssignBooleanToField()
+        public void Can_assign_boolean_to_field()
         {
             var hocon = @"a=true";
             Assert.Equal(true, ConfigurationFactory.ParseString(hocon).GetBoolean("a"));
@@ -358,28 +366,42 @@ a.b.e.f=3
         }
 
         [Fact]
-        public void CanAssignQuotedStringToField()
+        public void Can_assign_quoted_string_to_field()
         {
             var hocon = @"a=""hello""";
             Assert.Equal("hello", ConfigurationFactory.ParseString(hocon).GetString("a"));
         }
 
         [Fact]
-        public void CanAssignUnQuotedStringToField()
+        public void Can_assign_un_quoted_string_to_field()
         {
             var hocon = @"a=hello";
             Assert.Equal("hello", ConfigurationFactory.ParseString(hocon).GetString("a"));
         }
 
         [Fact]
-        public void CanAssignTripleQuotedStringToField()
+        public void Can_assign_triple_quoted_string_to_field()
         {
             var hocon = @"a=""""""hello""""""";
             Assert.Equal("hello", ConfigurationFactory.ParseString(hocon).GetString("a"));
         }
 
         [Fact]
-        public void CanUseFallback()
+        public void Can_assign_triple_quoted_string_with_unescaped_chars_to_field()
+        {
+            var hocon = @"a=""""""hello\y\o\u""""""";
+            Assert.Equal("hello\\y\\o\\u", ConfigurationFactory.ParseString(hocon).GetString("a"));
+        }
+
+        [Fact]
+        public void Can_assign_unescaped_path_like_variable_to_field()
+        {
+            var hocon = @"a=""""""C:\Dev\somepath\to\a\file.txt""""""";
+            Assert.Equal("C:\\Dev\\somepath\\to\\a\\file.txt", ConfigurationFactory.ParseString(hocon).GetString("a"));
+        }
+        
+        [Fact]
+        public void Can_use_fallback()
         {
             var hocon1 = @"
 foo {
@@ -407,7 +429,7 @@ foo {
         }
 
         [Fact]
-        public void CanUseFallbackInSubConfig()
+        public void Can_use_fallback_in_sub_config()
         {
             var hocon1 = @"
 foo {
@@ -435,7 +457,7 @@ foo {
         }
 
         [Fact]
-        public void CanUseMultiLevelFallback()
+        public void Can_use_multi_level_fallback()
         {
             var hocon1 = @"
 foo {
@@ -480,7 +502,7 @@ foo {
         }
 
         [Fact]
-        public void CanUseFluentMultiLevelFallback()
+        public void Can_use_fluent_multi_level_fallback()
         {
             var hocon1 = @"
 foo {
@@ -524,8 +546,57 @@ foo {
             config.GetInt("foo.bar.borkbork").ShouldBe(-1);
         }
 
+        [Fact(DisplayName = @"Scalar value should not be overriden by an object in fallback and vice versa")]
+        public void Scalar_value_should_not_be_overriden_by_an_object_in_fallback_and_vice_versa() {
+            var hocon1 = @"
+a {
+    b = 1
+}
+";
+            var hocon2 = @"
+a {
+    b {
+        c = 2
+    }
+}
+";
+
+            var config1 = ConfigurationFactory.ParseString(hocon1);
+            var config2 = ConfigurationFactory.ParseString(hocon2);
+
+            var config12 = config1.WithFallback(config2);
+            var config21 = config2.WithFallback(config1);
+
+            Assert.Equal(1, config12.GetInt("a.b"));
+            Assert.Equal(2, config21.GetInt("a.b.c"));
+        }
+
+        [Fact(DisplayName = "Config constructed from merging with fallback should not share state with origin")]
+        public void Config_constructed_from_merging_with_fallback_should_not_share_state_with_origin()
+        {
+            var hocon1 = @"
+a {
+    b = 1
+}
+";
+            var hocon2 = @"
+a {
+    c = 2
+}
+";
+
+            var config1 = ConfigurationFactory.ParseString(hocon1);
+            var config2 = ConfigurationFactory.ParseString(hocon2);
+
+            var config12 = config1.WithFallback(config2);
+
+            Assert.Equal(2, config12.GetInt("a.c"));
+            Assert.Equal(0, config1.GetInt("a.c"));
+            Assert.Equal(0, config2.GetInt("a.b"));
+        }
+
         [Fact]
-        public void CanParseQuotedKeys()
+        public void Can_parse_quoted_keys()
         {
             var hocon = @"
 a {
@@ -537,7 +608,44 @@ a {
         }
 
         [Fact]
-        public void CanEnumerateQuotedKeys()
+        public void Can_parse_quoted_keys_with_dots()
+        {
+            var hocon = @"
+a {
+   ""/abc/d.ev/*"": 123
+}
+";
+            var config = ConfigurationFactory.ParseString(hocon);
+            config.GetConfig("a").Root.GetObject().GetKey("/abc/d.ev/*").GetInt().ShouldBe(123);
+        }
+
+        [Fact]
+        public void Get_config_supports_quoting()
+        {
+            var hocon = @"
+a {
+   ""/abc/d.ev/*"": 123
+}
+";
+            var config = ConfigurationFactory.ParseString(hocon);
+            config.GetConfig("a").GetConfig(@"""/abc/d.ev/*""").ShouldNotBe(null);
+        }
+
+        [Fact]
+        public void Get_config_supports_quoting_combined_with_dotting()
+        {
+            var hocon = @"
+a {
+   ""/abc/d.ev/*"".d: 123
+}
+";
+            var config = ConfigurationFactory.ParseString(hocon);
+            config.GetConfig(@"a.""/abc/d.ev/*""").ShouldNotBe(null);
+            config.GetConfig(@"a.""/abc/d.ev/*"".d").ShouldNotBe(null);
+        }
+
+        [Fact]
+        public void Can_enumerate_quoted_keys()
         {
             var hocon = @"
 a {
@@ -548,11 +656,26 @@ a {
             var config2 = config.GetConfig("a");
             var enumerable = config2.AsEnumerable();
 
-            enumerable.Select(kvp => kvp.Key).First().ShouldBe("some quoted, key");            
+            enumerable.Select(kvp => kvp.Key).First().ShouldBe("some quoted, key");
         }
 
         [Fact]
-        public void CanParseSerializersAndBindings()
+        public void Can_enumerate_quoted_keys_with_dots()
+        {
+            var hocon = @"
+a {
+   ""/abc/d.ev/*"": 123
+}
+";
+            var config = ConfigurationFactory.ParseString(hocon);
+            var config2 = config.GetConfig("a");
+            var enumerable = config2.AsEnumerable();
+
+            enumerable.Select(kvp => kvp.Key).First().ShouldBe("/abc/d.ev/*");
+        }
+
+        [Fact]
+        public void Can_parse_serializers_and_bindings()
         {
             var hocon = @"
 akka.actor {
@@ -577,12 +700,15 @@ akka.actor {
             var serializersConfig = config.GetConfig("akka.actor.serializers").AsEnumerable().ToList();
             var serializerBindingConfig = config.GetConfig("akka.actor.serialization-bindings").AsEnumerable().ToList();
 
-            serializersConfig.Select(kvp => kvp.Value).First().GetString().ShouldBe("Akka.Remote.Serialization.MessageContainerSerializer, Akka.Remote");
+            serializersConfig.Select(kvp => kvp.Value)
+                .First()
+                .GetString()
+                .ShouldBe("Akka.Remote.Serialization.MessageContainerSerializer, Akka.Remote");
             serializerBindingConfig.Select(kvp => kvp.Key).Last().ShouldBe("Akka.Remote.DaemonMsgCreate, Akka.Remote");
         }
 
         [Fact]
-        public void CanOverwriteValue()
+        public void Can_overwrite_value()
         {
             var hocon = @"
 test {
@@ -593,5 +719,203 @@ test.value = 456
             var config = ConfigurationFactory.ParseString(hocon);
             config.GetInt("test.value").ShouldBe(456);
         }
+
+        [Fact]
+        public void Can_substitute_object()
+        {
+            var hocon = @"a {
+  b {
+      foo = hello
+      bar = 123
+  }
+  c {
+     d = xyz
+     e = ${a.b}
+  }  
+}";
+            var ace = ConfigurationFactory.ParseString(hocon).GetConfig("a.c.e");
+            Assert.Equal("hello", ace.GetString("foo"));
+            Assert.Equal(123, ace.GetInt("bar"));
+        }
+
+        [Fact]
+        public void Can_assign_null_string_to_field()
+        {
+            var hocon = @"a=null";
+            Assert.Equal(null, ConfigurationFactory.ParseString(hocon).GetString("a"));
+        }
+
+        [Fact(Skip = "we currently do not make any distinction between quoted and unquoted strings once parsed")]
+        public void Can_assign_quoted_null_string_to_field()
+        {
+            var hocon = @"a=""null""";
+            Assert.Equal("null", ConfigurationFactory.ParseString(hocon).GetString("a"));
+        }
+
+        [Fact]
+        public void Can_parse_include()
+        {
+            var hocon = @"a {
+  b { 
+       include ""foo""
+  }";
+            var includeHocon = @"
+x = 123
+y = hello
+";
+            Func<string, HoconRoot> include = s => Parser.Parse(includeHocon, null);
+            var config = ConfigurationFactory.ParseString(hocon,include);
+
+            Assert.Equal(123,config.GetInt("a.b.x"));
+            Assert.Equal("hello", config.GetString("a.b.y"));
+        }
+
+        [Fact]
+        public void Can_resolve_substitutes_in_include()
+        {
+            var hocon = @"a {
+  b { 
+       include ""foo""
+  }";
+            var includeHocon = @"
+x = 123
+y = ${x}
+";
+            Func<string, HoconRoot> include = s => Parser.Parse(includeHocon, null);
+            var config = ConfigurationFactory.ParseString(hocon, include);
+
+            Assert.Equal(123, config.GetInt("a.b.x"));
+            Assert.Equal(123, config.GetInt("a.b.y"));
+        }
+
+        [Fact]
+        public void Can_resolve_substitutes_in_nested_includes()
+        {
+            var hocon = @"a.b.c {
+  d { 
+       include ""foo""
+  }";
+            var includeHocon = @"
+f = 123
+e {
+      include ""foo""
+}
+";
+
+            var includeHocon2 = @"
+x = 123
+y = ${x}
+";
+
+            Func<string, HoconRoot> include2 = s => Parser.Parse(includeHocon2, null);
+            Func<string, HoconRoot> include = s => Parser.Parse(includeHocon, include2);
+            var config = ConfigurationFactory.ParseString(hocon, include);
+
+            Assert.Equal(123, config.GetInt("a.b.c.d.e.x"));
+            Assert.Equal(123, config.GetInt("a.b.c.d.e.y"));
+        }
+
+        [Fact]
+        public void Can_parse_unquoted_ipv4()
+        {
+            var hocon = @"
+ip = 127.0.0.1
+";
+            Assert.Equal("127.0.0.1", ConfigurationFactory.ParseString(hocon).GetString("ip"));
+        }
+
+        [Fact]
+        public void Can_parse_quoted_ipv4()
+        {
+            var hocon = @"
+ip = ""127.0.0.1""
+";
+            Assert.Equal("127.0.0.1", ConfigurationFactory.ParseString(hocon).GetString("ip"));
+        }
+
+        [Fact(Skip = "Not allowed according to current HOCON spec")]
+        public void Can_parse_unquoted_ipv6()
+        {
+            var hocon = @"
+ip = ::1
+";
+            var res = ConfigurationFactory.ParseString(hocon).GetString("ip");
+            Assert.Equal("::1", res);
+        }
+
+        [Fact]
+        public void Can_parse_quoted_ipv6()
+        {
+            var hocon = @"
+ip = ""::1""
+";
+            var res = ConfigurationFactory.ParseString(hocon).GetString("ip");
+            Assert.Equal("::1", res);
+        }
+
+        [Fact]
+        public void Can_parse_non_abbreviated_timespan()
+        {
+            var hocon = "timespan = 10 seconds";
+
+            var res = ConfigurationFactory.ParseString(hocon).GetTimeSpan("timespan");
+            Assert.Equal(10, res.TotalSeconds);
+        }
+
+        [Fact]
+        public void Can_parse_abbreviated_timespan() 
+        {
+            var hocon = "timespan = 10 s";
+
+            var res = ConfigurationFactory.ParseString(hocon).GetTimeSpan("timespan");
+            Assert.Equal(10, res.TotalSeconds);
+        }
+
+        [Fact]
+        public void Can_parse_abbreviated_timespan2()
+        {
+            var hocon = "timespan = 0.05 s";
+
+            var res = ConfigurationFactory.ParseString(hocon).GetTimeSpan("timespan");
+            Assert.Equal(50, res.TotalMilliseconds);
+        }
+
+        [Fact(Skip = "not working yet")]
+        public void Can_substitute_with_concated_string()
+        {
+            var hocon = @"
+    akka.cluster.name = cluster
+    akka.cluster.seed-node = ""akka.tcp://${akka.cluster.name}@127.0.0.1:4053""";
+
+            var config = ConfigurationFactory.ParseString(hocon);
+            var actual = config.GetString("akka.cluster.seed-node");
+            Console.Out.WriteLine($"RESULT:{actual}");
+            Assert.Equal("akka.tcp://cluster@127.0.0.1:4053", actual);
+        }
+
+        [Fact]
+        public void Can_parse_unquoted_string_list()
+        {
+            var hocon = @"hocon-array = [array-value-1, array-value-2]";
+            var config = ConfigurationFactory.ParseString(hocon);
+            var actual = config.GetStringList("hocon-array");
+            Assert.True(actual.Contains("array-value-1"));
+            Assert.True(actual.Contains("array-value-2"));
+        }
+
+        [Fact]
+        public void Should_throw_an_exception_when_parsing_invalid_unquoted_string()
+        {
+            var hocon = @"unquoted-string = akka.tcp://Cluster@127.0.0.1:4053";
+            Assert.Throws<ConfigurationException>(() => { ConfigurationFactory.ParseString(hocon); });
+        }
+        
+        [Fact]
+        public void Should_throw_an_exception_when_parsing_invalid_unquoted_string_inside_array()
+        {
+            var hocon = @"akka.cluster.seed-nodes = [akka.tcp://Cluster@127.0.0.1:4053]";
+            Assert.Throws<ConfigurationException>(() => { ConfigurationFactory.ParseString(hocon); });
+        }
     }
 }
+

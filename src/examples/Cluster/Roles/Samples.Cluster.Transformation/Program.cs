@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="Program.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Configuration;
 using Akka.Actor;
 using Akka.Configuration;
@@ -19,6 +26,7 @@ namespace Samples.Cluster.Transformation
             LaunchBackend(new[] { "2552" });
             LaunchBackend(new string[0]);
             LaunchFrontend(new string[0]);
+            LaunchFrontend(new string[0]);
             //starting 2 frontend nodes and 3 backend nodes
             Console.WriteLine("Press any key to exit.");
             Console.ReadKey();
@@ -28,7 +36,7 @@ namespace Samples.Cluster.Transformation
         {
             var port = args.Length > 0 ? args[0] : "0";
             var config =
-                    ConfigurationFactory.ParseString("akka.remote.helios.tcp.port=" + port)
+                    ConfigurationFactory.ParseString("akka.remote.dot-netty.tcp.port=" + port)
                     .WithFallback(ConfigurationFactory.ParseString("akka.cluster.roles = [backend]"))
                         .WithFallback(_clusterConfig);
 
@@ -40,7 +48,7 @@ namespace Samples.Cluster.Transformation
         {
             var port = args.Length > 0 ? args[0] : "0";
             var config =
-                    ConfigurationFactory.ParseString("akka.remote.helios.tcp.port=" + port)
+                    ConfigurationFactory.ParseString("akka.remote.dot-netty.tcp.port=" + port)
                     .WithFallback(ConfigurationFactory.ParseString("akka.cluster.roles = [frontend]"))
                         .WithFallback(_clusterConfig);
 
@@ -50,10 +58,11 @@ namespace Samples.Cluster.Transformation
             var interval = TimeSpan.FromSeconds(2);
             var timeout = TimeSpan.FromSeconds(5);
             var counter = new AtomicCounter();
-            system.Scheduler.Schedule(interval, interval, 
+            system.Scheduler.Advanced.ScheduleRepeatedly(interval, interval, 
                 () => frontend.Ask(new TransformationMessages.TransformationJob("hello-" + counter.GetAndIncrement()), timeout)
-                .ContinueWith(
-                    r => Console.WriteLine(r.Result)));
+                    .ContinueWith(
+                        r => Console.WriteLine(r.Result)));
         }
     }
 }
+

@@ -1,8 +1,14 @@
+﻿//-----------------------------------------------------------------------
+// <copyright file="SpecRunCoordinator.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Akka.Actor;
-using Akka.MultiNodeTestRunner.Shared.Persistence;
 using Akka.MultiNodeTestRunner.Shared.Sinks;
 
 namespace Akka.MultiNodeTestRunner.Shared.Reporting
@@ -18,7 +24,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Reporting
             MethodName = methodName;
             ClassName = className;
             FactData = new FactData(string.Format("{0}.{1}", className, methodName));
-            _nodeActors = new Dictionary<int, ActorRef>();
+            _nodeActors = new Dictionary<int, IActorRef>();
             SetReceive();
         }
 
@@ -36,7 +42,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Reporting
         /// <summary>
         /// Internal dictionary used to route messages to their discrete nodes
         /// </summary>
-        private readonly Dictionary<int, ActorRef> _nodeActors;
+        private readonly Dictionary<int, IActorRef> _nodeActors;
 
         #region Actor Lifecycle
 
@@ -46,7 +52,8 @@ namespace Akka.MultiNodeTestRunner.Shared.Reporting
             foreach (var node in Nodes)
             {
                 var index = node.Node;
-                _nodeActors.Add(index, Context.ActorOf(Props.Create(() => new NodeDataActor(index))));
+                var role = node.Role;
+                _nodeActors.Add(index, Context.ActorOf(Props.Create(() => new NodeDataActor(index, role))));
             }
         }
 
@@ -80,7 +87,7 @@ namespace Akka.MultiNodeTestRunner.Shared.Reporting
         /// and report their results
         /// </summary>
         /// <returns>An awaitable task, since this operation uses the <see cref="Futures.Ask"/> pattern</returns>
-        private Task HandleEndSpec(EndSpec endSpec)
+        private void HandleEndSpec(EndSpec endSpec)
         {
             var futures = new Task<NodeData>[Nodes.Count];
 
@@ -94,14 +101,14 @@ namespace Akka.MultiNodeTestRunner.Shared.Reporting
             var sender = Context.Sender;
 
             //wait for all Ask operations to complete and pipe the result back to ourselves, including the ref for the original sender
-            return Task.WhenAll(futures)
+            Task.WhenAll(futures)
                 .PipeTo(Self, sender);
         }
 
         /// <summary>
         /// When the result of a <see cref="HandleEndSpec"/> finally gets finished...
         /// </summary>
-        /// <param name="nodeDatum">An evenlope with all of the <see cref="NodeData"/> messages we processed from earilier</param>
+        /// <param name="nodeDatum">An envelope with all of the <see cref="NodeData"/> messages we processed from earlier</param>
         private void HandleNodeDatum(NodeData[] nodeDatum)
         {
             FactData.AddNodes(nodeDatum);
@@ -120,3 +127,4 @@ namespace Akka.MultiNodeTestRunner.Shared.Reporting
 
     }
 }
+

@@ -1,8 +1,12 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="CollectionExtensionsSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Akka.TestKit;
 using Akka.Util.Internal;
 using Xunit;
@@ -68,3 +72,4 @@ namespace Akka.Tests.Util
         }
     }
 }
+

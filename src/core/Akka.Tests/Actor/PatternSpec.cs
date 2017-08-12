@@ -1,13 +1,19 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="PatternSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Threading.Tasks;
 using Akka.Actor;
+using Akka.Event;
 using Akka.TestKit;
-using Akka.Tests.Event;
 using Xunit;
 
 namespace Akka.Tests.Actor
 {
-    
     public class PatternSpec : AkkaSpec
     {
         [Fact]
@@ -44,7 +50,7 @@ namespace Akka.Tests.Actor
         {
             //arrange
             var target = Sys.ActorOf<TargetActor>();
-            var latch = new TestLatch(Sys);
+            var latch = new TestLatch();
 
             //act
             target.Tell(Tuple.Create(latch, TimeSpan.FromSeconds(2)));
@@ -58,6 +64,21 @@ namespace Akka.Tests.Actor
             });
             latch.Open();
 
+        }
+
+        [Fact]
+        public async Task GracefulStop_must_not_send_unnecessary_Deadletter_bug_2157()
+        {
+            //arrange  
+            var target = Sys.ActorOf<TargetActor>();
+            Sys.EventStream.Subscribe(TestActor, typeof(DeadLetter));
+
+            //act  
+            var stopped = await target.GracefulStop(TimeSpan.FromSeconds(5));
+
+            //assert  
+            Assert.True(stopped);
+            ExpectNoMsg(TimeSpan.Zero);
         }
 
         #region Actors
@@ -84,3 +105,4 @@ namespace Akka.Tests.Actor
         #endregion
     }
 }
+

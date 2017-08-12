@@ -1,11 +1,15 @@
-﻿using System;
-using Akka.Actor.Internals;
+﻿//-----------------------------------------------------------------------
+// <copyright file="RemoteDaemonSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System.Threading;
+using Akka.Actor;
+using Akka.Actor.Internal;
 using Akka.TestKit;
 using Xunit;
-using Akka.Actor;
-using Akka.Configuration;
-using System.Collections.Concurrent;
-using System.Threading;
 
 namespace Akka.Remote.Tests
 {
@@ -44,10 +48,10 @@ akka {
     remote {
          test-transport {
             transport-class = ""Akka.Remote.Transport.TestTransport, Akka.Remote""
-		    applied-adapters = []
-		    transport-protocol = test
-		    port = 891
-		    hostname = ""127.0.0.1""
+            applied-adapters = []
+            transport-protocol = test
+            port = 891
+            hostname = ""127.0.0.1""
         }
     }
 }
@@ -55,7 +59,7 @@ akka {
         }
 
         [Fact]
-        public void CanCreateActorUsingRemoteDaemonAndInteractWithChild()
+        public void Can_create_actor_using_remote_daemon_and_interact_with_child()
         {
             var p = CreateTestProbe();
             Sys.EventStream.Subscribe(p.Ref, typeof(string));
@@ -82,3 +86,4 @@ akka {
         }
     }
 }
+

@@ -1,14 +1,16 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="Program.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Akka;
+using System.Diagnostics;
 using Akka.Actor;
 using Akka.Configuration;
 using Akka.Event;
-using System.Diagnostics;
-using System.Threading;
 
 namespace FaultTolerance
 {
@@ -37,7 +39,7 @@ namespace FaultTolerance
     // Listens on progress from the worker and shuts down the system when enough work has been done.
     public class Listener : UntypedActor
     {
-        LoggingAdapter log = Logging.GetLogger(Context);
+        ILoggingAdapter log = Logging.GetLogger(Context);
 
         protected override void PreRestart(Exception reason, object message)
         {
@@ -58,14 +60,14 @@ namespace FaultTolerance
                 if (progress.Percent >= 100)
                 {
                     log.Info("That's all, shutting down");
-                    Context.System.Shutdown();
+                    Context.System.Terminate();
                 }
             }
             else if (message == ReceiveTimeout.Instance)
             {
                 // No progress within 15 seconds, ServiceUnavailable
                 log.Error("Shutting down due to unavailable service");
-                Context.System.Shutdown();
+                Context.System.Terminate();
             }
             else
             {
@@ -102,11 +104,11 @@ namespace FaultTolerance
     // The Worker supervise the CounterService.
     public class Worker : UntypedActor
     {
-        LoggingAdapter log = Logging.GetLogger(Context);
+        ILoggingAdapter log = Logging.GetLogger(Context);
 
         // The sender of the initial Start message will continuously be notified about progress
-        ActorRef progressListener;
-        ActorRef counterService = Context.ActorOf<CounterService>("counter");
+        IActorRef progressListener;
+        IActorRef counterService = Context.ActorOf<CounterService>("counter");
         int totalCount = 51;
 
         // Stop the CounterService child if it throws ServiceUnavailable
@@ -128,7 +130,7 @@ namespace FaultTolerance
             if (message.Equals("Start") && progressListener == null)
             {
                 progressListener = Sender;
-                Context.System.Scheduler.Schedule(TimeSpan.Zero, TimeSpan.FromSeconds(1), Self, "Do");
+                Context.System.Scheduler.ScheduleTellRepeatedlyCancelable(TimeSpan.Zero, TimeSpan.FromSeconds(1), Self, "Do", Self);
             }
             else if (message.Equals("Do"))
             {
@@ -200,11 +202,11 @@ namespace FaultTolerance
     // supervise Storage and Counter.
     public class CounterService : UntypedActor
     {
-        LoggingAdapter log = Logging.GetLogger(Context);
+        ILoggingAdapter log = Logging.GetLogger(Context);
 
         string key = Context.Self.Path.Name;
-        ActorRef storage;
-        ActorRef counter;
+        IActorRef storage;
+        IActorRef counter;
         List<SenderMessagePair> backlog = new List<SenderMessagePair>();
         int MAX_BACKLOG = 10000;
 
@@ -280,7 +282,7 @@ namespace FaultTolerance
                 counter.Tell(new UseStorage(null));
 
                 // Try to re-establish storage after while
-                Context.System.Scheduler.ScheduleOnce(TimeSpan.FromSeconds(10), Self, "Reconnect");
+                Context.System.Scheduler.ScheduleTellOnceCancelable(TimeSpan.FromSeconds(10), Self, "Reconnect", Self);
             }
             else if (message.Equals("Reconnect"))
             {
@@ -302,7 +304,7 @@ namespace FaultTolerance
             if (counter == null)
             {
                 if (backlog.Count >= MAX_BACKLOG)
-                    throw new ServiceUnavailableException("CounterService nto available, lack of initial value");
+                    throw new ServiceUnavailableException("CounterService not available, lack of initial value");
 
                 backlog.Add(new SenderMessagePair(Sender, message));
             }
@@ -314,13 +316,13 @@ namespace FaultTolerance
 
         private class SenderMessagePair
         {
-            public SenderMessagePair(ActorRef sender, object message)
+            public SenderMessagePair(IActorRef sender, object message)
             {
                 this.Sender = sender;
                 this.Message = message;
             }
 
-            public ActorRef Sender { get; private set; }
+            public IActorRef Sender { get; private set; }
             public object Message { get; private set; }
         }
     }
@@ -331,12 +333,12 @@ namespace FaultTolerance
 
     public class UseStorage
     {
-        public UseStorage(ActorRef storage)
+        public UseStorage(IActorRef storage)
         {
             this.Storage = storage;
         }
 
-        public ActorRef Storage { get; private set; }
+        public IActorRef Storage { get; private set; }
 
         public override string ToString()
         {
@@ -352,10 +354,10 @@ namespace FaultTolerance
     // if there is any storage available at the moment.
     public class Counter : UntypedActor
     {
-        LoggingAdapter log = Logging.GetLogger(Context);
+        ILoggingAdapter log = Logging.GetLogger(Context);
         string key;
         long count;
-        ActorRef storage;
+        IActorRef storage;
 
         public Counter(string key, long initialValue)
         {
@@ -519,3 +521,4 @@ namespace FaultTolerance
 
     #endregion
 }
+

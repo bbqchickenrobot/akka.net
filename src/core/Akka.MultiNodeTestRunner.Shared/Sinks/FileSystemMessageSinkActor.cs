@@ -1,3 +1,10 @@
+﻿//-----------------------------------------------------------------------
+// <copyright file="FileSystemMessageSinkActor.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
 using System.IO;
 using Akka.Actor;
@@ -11,11 +18,13 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
     /// </summary>
     public class FileSystemMessageSink : MessageSink
     {
-        public FileSystemMessageSink(string assemblyName)
+        public FileSystemMessageSink(string assemblyName, string platform)
             : this(
                 Props.Create(
                     () =>
-                        new FileSystemMessageSinkActor(new JsonPersistentTestRunStore(), GenerateFileName(assemblyName),
+                        new FileSystemMessageSinkActor(new JsonPersistentTestRunStore(), 
+                            FileNameGenerator.GenerateFileName(assemblyName, platform, ".json"),
+                            true,
                             true)))
         {
             
@@ -29,15 +38,6 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
         {
             //do nothing
         }
-
-        #region Static methods
-
-        public static string GenerateFileName(string assemblyName)
-        {
-            return string.Format("{0}-{1}.json", assemblyName.Replace(".dll", ""), DateTime.UtcNow.Ticks);
-        }
-
-        #endregion
     }
 
     /// <summary>
@@ -47,12 +47,14 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
     {
         protected IPersistentTestRunStore FileStore;
         protected string FileName;
+        private readonly bool _reportStatus;
 
-        public FileSystemMessageSinkActor(IPersistentTestRunStore store, string fileName, bool useTestCoordinator)
+        public FileSystemMessageSinkActor(IPersistentTestRunStore store, string fileName, bool reportStatus, bool useTestCoordinator)
             : base(useTestCoordinator)
         {
             FileStore = store;
             FileName = fileName;
+            _reportStatus = reportStatus;
         }
 
         protected override void AdditionalReceives()
@@ -62,8 +64,19 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
 
         protected override void HandleTestRunTree(TestRunTree tree)
         {
-            Console.WriteLine("Writing test state to: {0}", Path.GetFullPath(FileName));
-            FileStore.SaveTestRun(FileName, tree);
+            if (_reportStatus)
+                Console.WriteLine("Writing test state to: {0}", Path.GetFullPath(FileName));
+            try
+            {
+                FileStore.SaveTestRun(FileName, tree);
+            }
+            catch (Exception ex) //avoid throwing exception back to parent - just continue
+            {
+                if (_reportStatus)
+                    Console.WriteLine("Failed to write test state to {0}. Cause: {1}", Path.GetFullPath(FileName), ex);                
+            }
+            if (_reportStatus)
+                Console.WriteLine("Finished.");           
         }
 
         protected override void ReceiveFactData(FactData data)
@@ -73,3 +86,4 @@ namespace Akka.MultiNodeTestRunner.Shared.Sinks
         }
     }
 }
+

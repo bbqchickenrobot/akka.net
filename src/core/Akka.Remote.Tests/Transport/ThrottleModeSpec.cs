@@ -1,13 +1,22 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ThrottleModeSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using Akka.Remote.Transport;
 using Akka.TestKit;
+using Akka.Util;
 using Xunit;
+using TokenBucket = Akka.Remote.Transport.TokenBucket;
 
 namespace Akka.Remote.Tests.Transport
 {
     public class ThrottleModeSpec : AkkaSpec
     {
-        static readonly long HalfSecond = TimeSpan.FromSeconds(0.5).Ticks;
+        static readonly long HalfSecond = TimeSpan.FromSeconds(0.5).Ticks.ToNanos();
 
         [Fact]
         public void ThrottleMode_must_allow_consumption_of_infinite_amount_of_tokens_when_unthrottled()
@@ -112,3 +121,4 @@ namespace Akka.Remote.Tests.Transport
         }
     }
 }
+

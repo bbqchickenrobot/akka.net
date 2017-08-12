@@ -1,4 +1,12 @@
+ï»¿//-----------------------------------------------------------------------
+// <copyright file="TerminatingChildrenContainer.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
+using System.Collections.Immutable;
 using System.Text;
 using Akka.Util.Internal;
 using Akka.Util.Internal.Collections;
@@ -12,34 +20,60 @@ namespace Akka.Actor.Internal
     /// or Terminating.
     /// Removing the last child which was supposed to be terminating will return a different
     /// type of container, depending on whether or not children are left and whether or not
-    /// the reason was “Terminating”.
+    /// the reason was "Terminating".
     /// </summary>
     public class TerminatingChildrenContainer : ChildrenContainerBase
     {
-        private readonly IImmutableSet<ActorRef> _toDie;
+        private readonly ImmutableHashSet<IActorRef> _toDie;
         private readonly SuspendReason _reason;
 
-        public TerminatingChildrenContainer(IImmutableMap<string, ChildStats> children, ActorRef toDie, SuspendReason reason)
-            : this(children, ImmutableTreeSet<ActorRef>.Create(toDie), reason)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="children">TBD</param>
+        /// <param name="toDie">TBD</param>
+        /// <param name="reason">TBD</param>
+        public TerminatingChildrenContainer(IImmutableDictionary<string, IChildStats> children, IActorRef toDie, SuspendReason reason)
+            : this(children, ImmutableHashSet<IActorRef>.Empty.Add(toDie), reason)
         {
             //Intentionally left blank
         }
-        public TerminatingChildrenContainer(IImmutableMap<string, ChildStats> children, IImmutableSet<ActorRef> toDie, SuspendReason reason)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="children">TBD</param>
+        /// <param name="toDie">TBD</param>
+        /// <param name="reason">TBD</param>
+        public TerminatingChildrenContainer(IImmutableDictionary<string, IChildStats> children, ImmutableHashSet<IActorRef> toDie, SuspendReason reason)
             : base(children)
         {
             _toDie = toDie;
             _reason = reason;
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public SuspendReason Reason { get { return _reason; } }
 
-        public override ChildrenContainer Add(string name, ChildRestartStats stats)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="name">TBD</param>
+        /// <param name="stats">TBD</param>
+        /// <returns>TBD</returns>
+        public override IChildrenContainer Add(string name, ChildRestartStats stats)
         {
-            var newMap = InternalChildren.AddOrUpdate(name, stats);
+            var newMap = InternalChildren.SetItem(name, stats);
             return new TerminatingChildrenContainer(newMap, _toDie, _reason);
         }
 
-        public override ChildrenContainer Remove(ActorRef child)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="child">TBD</param>
+        /// <returns>TBD</returns>
+        public override IChildrenContainer Remove(IActorRef child)
         {
             var set = _toDie.Remove(child);
             if (set.IsEmpty)
@@ -50,38 +84,64 @@ namespace Akka.Actor.Internal
             return new TerminatingChildrenContainer(InternalChildren.Remove(child.Path.Name), set, _reason);
         }
 
-        public override ChildrenContainer ShallDie(ActorRef actor)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="actor">TBD</param>
+        /// <returns>TBD</returns>
+        public override IChildrenContainer ShallDie(IActorRef actor)
         {
             return new TerminatingChildrenContainer(InternalChildren, _toDie.Add(actor), _reason);
         }
 
-        public override ChildrenContainer Reserve(string name)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="name">TBD</param>
+        /// <exception cref="InvalidOperationException">This exception is thrown if the given <paramref name="name"/> belongs to an actor that is terminating.</exception>
+        /// <exception cref="InvalidActorNameException">This exception is thrown if the given <paramref name="name"/> is not unique in the container.</exception>
+        /// <returns>TBD</returns>
+        public override IChildrenContainer Reserve(string name)
         {
-            if (_reason is SuspendReason.Termination) throw new InvalidOperationException(string.Format("Cannot reserve actor name\"{0}\". Is terminating.", name));
-            if (InternalChildren.Contains(name))
-                throw new InvalidActorNameException(string.Format("Actor name \"{0}\" is not unique!", name));
+            if (_reason is SuspendReason.Termination) throw new InvalidOperationException($@"Cannot reserve actor name ""{name}"". It is terminating.");
+            if (InternalChildren.ContainsKey(name))
+                throw new InvalidActorNameException($@"Actor name ""{name}"" is not unique!");
             else
-                return new TerminatingChildrenContainer(InternalChildren.AddOrUpdate(name, ChildNameReserved.Instance), _toDie, _reason);
+                return new TerminatingChildrenContainer(InternalChildren.SetItem(name, ChildNameReserved.Instance), _toDie, _reason);
         }
 
-        public override ChildrenContainer Unreserve(string name)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="name">TBD</param>
+        /// <returns>TBD</returns>
+        public override IChildrenContainer Unreserve(string name)
         {
-            ChildStats stats;
-            if (!InternalChildren.TryGet(name, out stats))
+            if (!InternalChildren.ContainsKey(name))
                 return this;
             return new TerminatingChildrenContainer(InternalChildren.Remove(name), _toDie, _reason);
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public override bool IsTerminating
         {
             get { return _reason is SuspendReason.Termination; }
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public override bool IsNormal
         {
             get { return _reason is SuspendReason.UserRequest; }
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <returns>TBD</returns>
         public override string ToString()
         {
             var numberOfChildren = InternalChildren.Count;
@@ -90,18 +150,24 @@ namespace Akka.Actor.Internal
             if (numberOfChildren > 10)
                 sb.Append(numberOfChildren).Append(" children\n");
             else
-                sb.Append("Children:\n    ").AppendJoin("\n    ", InternalChildren.AllMinToMax, ChildStatsAppender).Append('\n');
+                sb.Append("Children:\n    ").AppendJoin("\n    ", InternalChildren, ChildStatsAppender).Append('\n');
 
             var numberToDie = _toDie.Count;
             sb.Append(numberToDie).Append(" children terminating:\n    ");
-            sb.AppendJoin("\n    ", _toDie.AllMinToMax);
+            sb.AppendJoin("\n    ", _toDie);
 
             return sb.ToString();
         }
 
-        public ChildrenContainer CreateCopyWithReason(SuspendReason reason)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="reason">TBD</param>
+        /// <returns>TBD</returns>
+        public IChildrenContainer CreateCopyWithReason(SuspendReason reason)
         {
             return new TerminatingChildrenContainer(InternalChildren, _toDie, reason);
         }
     }
 }
+

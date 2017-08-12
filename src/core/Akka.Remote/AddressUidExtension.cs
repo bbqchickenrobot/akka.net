@@ -1,4 +1,11 @@
-﻿using Akka.Actor;
+﻿//-----------------------------------------------------------------------
+// <copyright file="AddressUidExtension.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using Akka.Actor;
 using Akka.Util;
 
 namespace Akka.Remote
@@ -8,6 +15,11 @@ namespace Akka.Remote
     /// </summary>
     public class AddressUidExtension : ExtensionIdProvider<AddressUid>
     {
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="system">TBD</param>
+        /// <returns>TBD</returns>
         public override AddressUid CreateExtension(ExtendedActorSystem system)
         {
             return new AddressUid();
@@ -15,6 +27,11 @@ namespace Akka.Remote
 
         #region Static methods
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="system">TBD</param>
+        /// <returns>TBD</returns>
         public static int Uid(ActorSystem system)
         {
             return system.WithExtension<AddressUid, AddressUidExtension>().Uid;
@@ -31,9 +48,10 @@ namespace Akka.Remote
     /// </summary>
     public class AddressUid : IExtension
     {
-        public int Uid
-        {
-            get { return ThreadLocalRandom.Current.Next(); }
-        }
+        /// <summary>
+        /// The random unique identifier for this incarnation of the ActorSystem.
+        /// </summary>
+        public readonly int Uid = ThreadLocalRandom.Current.Next();
     }
 }
+

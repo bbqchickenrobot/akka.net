@@ -1,12 +1,21 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="TestKitBase_Receive.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using Akka.TestKit.Internal;
 
 namespace Akka.TestKit
 {
+    /// <summary>
+    /// TBD
+    /// </summary>
     public abstract partial class TestKitBase
     {
         /// <summary>
@@ -131,17 +140,17 @@ namespace Akka.TestKit
             if (maxDuration.IsZero())
             {
                 ConditionalLog(shouldLog, "Trying to receive message from TestActor queue. Will not wait.");
-                didTake = _queue.TryTake(out envelope);
+                didTake = _testState.Queue.TryTake(out envelope);
             }
             else if (maxDuration.IsPositiveFinite())
             {
                 ConditionalLog(shouldLog, "Trying to receive message from TestActor queue within {0}", maxDuration);
-                didTake = _queue.TryTake(out envelope, (int) maxDuration.TotalMilliseconds, cancellationToken);
+                didTake = _testState.Queue.TryTake(out envelope, (int)maxDuration.TotalMilliseconds, cancellationToken);
             }
             else if (maxDuration == Timeout.InfiniteTimeSpan)
             {
                 ConditionalLog(shouldLog, "Trying to receive message from TestActor queue. Will wait indefinitely.");
-                didTake = _queue.TryTake(out envelope, -1, cancellationToken);
+                didTake = _testState.Queue.TryTake(out envelope, -1, cancellationToken);
             }
             else
             {
@@ -151,16 +160,16 @@ namespace Akka.TestKit
                 didTake = false;
             }
 
-            _lastWasNoMsg = false;
+            _testState.LastWasNoMsg = false;
             if (didTake)
             {
                 ConditionalLog(shouldLog, "Received message after {0}.", Now - start);
-                _lastMessage = envelope;
+                _testState.LastMessage = envelope;
                 return true;
             }
             ConditionalLog(shouldLog, "Received no message after {0}.{1}", Now - start, cancellationToken.IsCancellationRequested ? " Was canceled" : "");
             envelope = NullMessageEnvelope.Instance;
-            _lastMessage = envelope;
+            _testState.LastMessage = envelope;
             return false;
         }
 
@@ -173,6 +182,11 @@ namespace Akka.TestKit
         /// Note that it is not an error to hit the `max` duration in this case.
         /// The max duration is scaled by <see cref="Dilated(TimeSpan)"/>
         /// </summary>
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="max">TBD</param>
+        /// <param name="filter">TBD</param>
+        /// <param name="msgs">TBD</param>
+        /// <returns>TBD</returns>
         public IReadOnlyList<T> ReceiveWhile<T>(TimeSpan? max, Func<object, T> filter, int msgs = int.MaxValue) where T : class
         {
             return ReceiveWhile(filter, max, Timeout.InfiniteTimeSpan, msgs);
@@ -187,6 +201,12 @@ namespace Akka.TestKit
         /// Note that it is not an error to hit the `max` duration in this case.
         /// The max duration is scaled by <see cref="Dilated(TimeSpan)"/>
         /// </summary>
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="max">TBD</param>
+        /// <param name="idle">TBD</param>
+        /// <param name="filter">TBD</param>
+        /// <param name="msgs">TBD</param>
+        /// <returns>TBD</returns>
         public IReadOnlyList<T> ReceiveWhile<T>(TimeSpan? max, TimeSpan? idle, Func<object, T> filter, int msgs = int.MaxValue) where T : class
         {
             return ReceiveWhile(filter, max, idle, msgs);
@@ -201,6 +221,12 @@ namespace Akka.TestKit
         /// Note that it is not an error to hit the `max` duration in this case.
         /// The max duration is scaled by <see cref="Dilated(TimeSpan)"/>
         /// </summary>
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="filter">TBD</param>
+        /// <param name="max">TBD</param>
+        /// <param name="idle">TBD</param>
+        /// <param name="msgs">TBD</param>
+        /// <returns>TBD</returns>
         public IReadOnlyList<T> ReceiveWhile<T>(Func<object, T> filter, TimeSpan? max = null, TimeSpan? idle = null, int msgs = int.MaxValue) where T : class
         {
             var maxValue = RemainingOrDilated(max);
@@ -216,15 +242,15 @@ namespace Akka.TestKit
                 MessageEnvelope envelope;
                 if (!TryReceiveOne(out envelope, (stop - Now).Min(idleValue)))
                 {
-                    _lastMessage = msg;
+                    _testState.LastMessage = msg;
                     break;
                 }
                 var message = envelope.Message;
                 var result = filter(message);
                 if (result == null)
                 {
-                    _queue.AddFirst(envelope);  //Put the message back in the queue
-                    _lastMessage = msg;
+                    _testState.Queue.AddFirst(envelope);  //Put the message back in the queue
+                    _testState.LastMessage = msg;
                     break;
                 }
                 msg = envelope;
@@ -233,14 +259,14 @@ namespace Akka.TestKit
             }
             ConditionalLog("Received {0} messages with filter during {1}", count, Now - start);
 
-            _lastWasNoMsg = true;
+            _testState.LastWasNoMsg = true;
             return acc;
         }
 
 
         /// <summary>
         /// Receive a series of messages.
-        /// It will continue to receive messages until the <see cref="shouldIgnore"/> predicate returns <c>false</c> or the idle 
+        /// It will continue to receive messages until the <paramref name="shouldIgnore"/> predicate returns <c>false</c> or the idle 
         /// timeout is met (disabled by default) or the overall
         /// maximum duration is elapsed or expected messages count is reached.
         /// If a message that isn't of type <typeparamref name="T"/> the parameter <paramref name="shouldIgnoreOtherMessageTypes"/> 
@@ -250,6 +276,13 @@ namespace Akka.TestKit
         /// Note that it is not an error to hit the `max` duration in this case.
         /// The max duration is scaled by <see cref="Dilated(TimeSpan)"/>
         /// </summary>
+        /// <typeparam name="T">TBD</typeparam>
+        /// <param name="shouldIgnore">TBD</param>
+        /// <param name="max">TBD</param>
+        /// <param name="idle">TBD</param>
+        /// <param name="msgs">TBD</param>
+        /// <param name="shouldIgnoreOtherMessageTypes">TBD</param>
+        /// <returns>TBD</returns>
         public IReadOnlyList<T> ReceiveWhile<T>(Predicate<T> shouldIgnore, TimeSpan? max = null, TimeSpan? idle = null, int msgs = int.MaxValue, bool shouldIgnoreOtherMessageTypes = true) where T : class
         {
             var start = Now;
@@ -266,7 +299,7 @@ namespace Akka.TestKit
                 MessageEnvelope envelope;
                 if (!TryReceiveOne(out envelope, (stop - Now).Min(idleValue)))
                 {
-                    _lastMessage = msg;
+                    _testState.LastMessage = msg;
                     break;
                 }
                 var message = envelope.Message;
@@ -290,15 +323,15 @@ namespace Akka.TestKit
                 }
                 if (shouldStop)
                 {
-                    _queue.AddFirst(envelope);  //Put the message back in the queue
-                    _lastMessage = msg;
+                    _testState.Queue.AddFirst(envelope);  //Put the message back in the queue
+                    _testState.LastMessage = msg;
                     break;
                 }
                 msg = envelope;
             }
             ConditionalLog("Received {0} messages with filter during {1}", count, Now - start);
 
-            _lastWasNoMsg = true;
+            _testState.LastWasNoMsg = true;
             return acc;
         }
 

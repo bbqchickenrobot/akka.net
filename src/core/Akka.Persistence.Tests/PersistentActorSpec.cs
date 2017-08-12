@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="PersistentActorSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -12,12 +19,23 @@ namespace Akka.Persistence.Tests
     {
         private readonly Random _random = new Random();
         public PersistentActorSpec()
-            : base(PersistenceSpec.Configuration("inmem", "PersistentActorSpec"))
+            : base(Configuration("PersistentActorSpec"))
         {
             var pref = ActorOf(Props.Create(() => new BehaviorOneActor(Name)));
             pref.Tell(new Cmd("a"));
             pref.Tell(GetState.Instance);
             ExpectMsgInOrder("a-1", "a-2");
+        }
+
+        [Fact]
+        public void PersistentActor_should_fail_fast_if_persistenceId_is_null()
+        {
+            EventFilter.Exception<ActorInitializationException>().And.Error(contains: "PersistenceId is [null] for PersistentActor").ExpectOne(() =>
+            {
+                var pref = ActorOf(Props.Create(() => new BehaviorOneActor(null)));
+                Watch(pref);
+                ExpectTerminated(pref);
+            });
         }
 
         [Fact]
@@ -160,51 +178,15 @@ namespace Akka.Persistence.Tests
         }
 
         [Fact]
-        public void PersistentActor_should_support_user_stash_operations()
-        {
-            var pref = ActorOf(Props.Create(() => new UserStashActor(Name)));
-            pref.Tell(new Cmd("a"));
-            pref.Tell(new Cmd("b"));
-            pref.Tell(new Cmd("c"));
-            ExpectMsg("b");
-            ExpectMsg("c");
-            ExpectMsg("a");
-        }
-
-        [Fact(Skip = "not implemented yet")]
-        public void PersistentActor_should_support_user_stash_operations_with_several_stashed_messages()
-        {
-            var pref = ActorOf(Props.Create(() => new UserStashManyActor(Name)));
-            var n = 10;
-
-            throw new NotImplementedException();
-        }
-
-        [Fact(Skip = "FIXME")]
-        public void PersistentActor_should_support_user_stash_operations_under_failures()
-        {
-            var pref = ActorOf(Props.Create(() => new UserStashFailureActor(Name)));
-            pref.Tell(new Cmd("a"));
-            for (int i = 1; i <= 10; i++)
-            {
-                var cmd = new Cmd("b-" + i);
-                pref.Tell(cmd);
-            }
-            pref.Tell(new Cmd("c"));
-            pref.Tell(GetState.Instance);
-            ExpectMsgInOrder("a-1", "a-2", "a", "c", "b-1", "b-3", "b-4", "b-5", "b-6", "b-7", "b-8", "b-9", "b-10");
-        }
-
-        [Fact]
         public void PersistentActor_should_be_able_to_persist_value_types_as_events()
         {
-            var pref = ActorOf(Props.Create(() => new IntEventPersistentActor(Name)));
+            var pref = ActorOf(Props.Create(() => new ValueTypeEventPersistentActor(Name)));
             pref.Tell(new Cmd("a"));
             ExpectMsg(5L);
         }
 
         [Fact]
-        public void PersistentActor_should_be_able_to_opt_out_from_stashing_messages_until_all_events_has_been_processed()
+        public void PersistentActor_should_be_able_to_opt_out_from_stashing_messages_until_all_events_have_been_processed()
         {
             var pref = ActorOf(Props.Create(() => new AsyncPersistActor(Name)));
             pref.Tell(new Cmd("x"));
@@ -215,8 +197,8 @@ namespace Akka.Persistence.Tests
             ExpectMsg("y-2");
         }
 
-        [Fact(Skip = "FIXME")]
-        public void PersistentActor_should_support_mutli_PersistAsync_calls_for_one_command_and_executed_them_when_possible()
+        [Fact]
+        public void PersistentActor_should_support_multiple_PersistAsync_calls_for_one_command_and_execute_them_when_possible_not_hindering_command_processing()
         {
             var pref = ActorOf(Props.Create(() => new AsyncPersistThreeTimesActor(Name)));
             var commands = Enumerable.Range(1, 10).Select(i => new Cmd("c-" + i)).ToArray();
@@ -232,7 +214,8 @@ namespace Akka.Persistence.Tests
             var replies = all.Where(r => r.Count(c => c == '-') == 1);
             replies.ShouldOnlyContainInOrder(commands.Select(cmd => cmd.Data).ToArray());
 
-            var expectedAcks = Enumerable.Range(3, 32).Select(i => "a-" + (i / 3) + "-" + (i / 2)).ToArray();
+            // range(3, 30) is equivalent of Scala (3 to 32)
+            var expectedAcks = Enumerable.Range(3, 30).Select(i => "a-" + (i / 3) + "-" + (i - 2)).ToArray();
             var acks = all.Where(r => r.Count(c => c == '-') == 2);
             acks.ShouldOnlyContainInOrder(expectedAcks);
         }
@@ -261,7 +244,7 @@ namespace Akka.Persistence.Tests
         }
 
         [Fact]
-        public void PersistentActor_should_support_the_same_event_being_PersistAsynced_mutliple_times()
+        public void PersistentActor_should_support_the_same_event_being_PersistAsynced_multiple_times()
         {
             var pref = ActorOf(Props.Create(() => new AsyncPersistSameEventTwiceActor(Name)));
             pref.Tell(new Cmd("x"));
@@ -273,7 +256,22 @@ namespace Akka.Persistence.Tests
         }
 
         [Fact]
-        public void PersistentActor_should_support_a_mix_of_persist_calls_and_persist_calls_in_expected_order()
+        public void PersistentActor_should_support_calling_PersistAll_with_null()
+        {
+            var pref = ActorOf(Props.Create(() => new PersistAllNullActor(Name)));
+            pref.Tell(new Cmd("defer-x"));
+            ExpectMsg("before-nil");
+            ExpectMsg("after-nil");
+            ExpectMsg("defer-x");
+
+            pref.Tell(new Cmd("persist-x"));
+            ExpectMsg("persist-x");
+            ExpectMsg("before-nil");
+            ExpectMsg("after-nil");
+        }
+
+        [Fact]
+        public void PersistentActor_should_support_a_mix_of_persist_calls_sync_async_sync_and_persist_calls_in_expected_order()
         {
             var pref = ActorOf(Props.Create(() => new AsyncPersistAndPersistMixedSyncAsyncSyncActor(Name)));
             pref.Tell(new Cmd("a"));
@@ -298,8 +296,8 @@ namespace Akka.Persistence.Tests
             ExpectNoMsg(TimeSpan.FromMilliseconds(100));
         }
 
-        [Fact(Skip = "not implemented yet")]
-        public void PersistentActor_should_support_a_mix_of_persist_calls_and_persist_calls()
+        [Fact]
+        public void PersistentActor_should_support_a_mix_of_persist_calls_sync_async_and_persist_calls()
         {
             var pref = ActorOf(Props.Create(() => new AsyncPersistAndPersistMixedSyncAsyncActor(Name)));
             pref.Tell(new Cmd("a"));
@@ -309,9 +307,22 @@ namespace Akka.Persistence.Tests
             ExpectMsg("a");
             ExpectMsg("a-e1-1");    // persist, must be before next command
 
-            var expected = new SortedSet<string> { "b", "a-ea2-2" };
+            var expected = new HashSet<string> { "b", "a-ea2-2" };
+            var found = ExpectMsgAnyOf(expected.Cast<object>().ToArray());  // ea2 is PersistAsync, b can be processed before it
+            expected.Remove(found.ToString());
+            ExpectMsgAnyOf(expected.Cast<object>().ToArray());
 
-            throw new NotImplementedException();
+            ExpectMsg("b-e1-3");        // persist, must be before next command
+
+            var expected2 = new HashSet<string> { "c", "b-ea2-4" };
+            var found2 = ExpectMsgAnyOf(expected2.Cast<object>().ToArray());
+            expected.Remove(found2.ToString());
+            ExpectMsgAnyOf(expected2.Cast<object>().ToArray());
+
+            ExpectMsg("c-e1-5");
+            ExpectMsg("c-ea2-6");
+
+            ExpectNoMsg(TimeSpan.FromMilliseconds(100));
         }
 
         [Fact]
@@ -422,7 +433,7 @@ namespace Akka.Persistence.Tests
         }
 
         [Fact]
-        public void PersistentActor_should_receiver_RecoveryFinished_if_its_handled_after_all_events_have_been_replayed()
+        public void PersistentActor_should_receive_RecoveryFinished_if_it_is_handled_after_all_events_have_been_replayed()
         {
             var pref = ActorOf(Props.Create(() => new SnapshottingPersistentActor(Name, TestActor)));
             pref.Tell(new Cmd("b"));
@@ -441,24 +452,164 @@ namespace Akka.Persistence.Tests
             ExpectMsgInOrder("a-1", "a-2", "b-41", "b-42", "c-41", "c-42", RecoveryCompleted.Instance);
         }
 
-        [Fact(Skip = "not implemented yet")]
+        [Fact]
         public void PersistentActor_should_preserve_order_of_incoming_messages()
         {
-            throw new NotImplementedException();
+            var pref = ActorOf(Props.Create(() => new StressOrdering(Name)));
+            pref.Tell(new Cmd("a"));
+            var latch = new TestLatch(1);
+            pref.Tell(new LatchCmd(latch, "b"));
+            pref.Tell("c");
+            ExpectMsg("a");
+            ExpectMsg("b");
+            pref.Tell("d");
+            latch.CountDown();
+            ExpectMsg("c");
+            ExpectMsg("d");
         }
 
-        [Fact(Skip = "not implemented yet")]
-        public void PersistentActor_should_be_used_as_a_stackable_modification()
+        [Fact]
+        public void PersistentActor_should_allow_multiple_Persists_with_nested_Persist_calls()
         {
-            throw new NotImplementedException();
+            var pref = ActorOf(Props.Create(() => new MultipleAndNestedPersists(Name, TestActor)));
+            pref.Tell("a");
+            pref.Tell("b");
+
+            ExpectMsg("a");
+            ExpectMsg("a-outer-1");
+            ExpectMsg("a-outer-2");
+            ExpectMsg("a-inner-1");
+            ExpectMsg("a-inner-2");
+            // and only then process "b"
+            ExpectMsg("b");
+            ExpectMsg("b-outer-1");
+            ExpectMsg("b-outer-2");
+            ExpectMsg("b-inner-1");
+            ExpectMsg("b-inner-2");
         }
 
-        private void ExpectMsgInOrder(params object[] ordered)
+        [Fact]
+        public void PersistentActor_should_allow_multiple_PersistAsyncs_with_nested_PersistAsync_calls()
         {
-            var msg = ExpectMsg<object[]>();
-            msg
-                //.Select(x => x.ToString())
-                .ShouldOnlyContainInOrder(ordered);
+            var pref = ActorOf(Props.Create(() => new MultipleAndNestedPersistAsyncs(Name, TestActor)));
+            pref.Tell("a");
+            pref.Tell("b");
+
+            var msgs = ReceiveN(10).Select(m => m.ToString()).ToArray();
+            var amsgs = msgs.Where(m => m.StartsWith("a")).ToArray();
+            var bmsgs = msgs.Where(m => m.StartsWith("b")).ToArray();
+            amsgs.ShouldOnlyContainInOrder("a", "a-outer-1", "a-outer-2", "a-inner-1", "a-inner-2");
+            bmsgs.ShouldOnlyContainInOrder("b", "b-outer-1", "b-outer-2", "b-inner-1", "b-inner-2");
+        }
+
+        [Fact]
+        public void PersistentActor_should_allow_deeply_nested_Persist_calls()
+        {
+            const int nestedPersists = 6;
+            var pref = ActorOf(Props.Create(() => new DeeplyNestedPersists(Name, nestedPersists, TestActor)));
+            pref.Tell("a");
+            pref.Tell("b");
+
+            ExpectMsg("a");
+            ReceiveN(nestedPersists).Select(m => m.ToString()).ShouldOnlyContainInOrder(Enumerable.Range(1, nestedPersists).Select(i => "a-" + i).ToArray());
+            // and only then process "b"
+            ExpectMsg("b");
+            ReceiveN(nestedPersists).Select(m => m.ToString()).ShouldOnlyContainInOrder(Enumerable.Range(1, nestedPersists).Select(i => "b-" + i).ToArray());
+        }
+
+        [Fact]
+        public void PersistentActor_should_allow_deeply_nested_PersistAsync_calls()
+        {
+            const int nestedPersistAsyncs = 6;
+            var pref = ActorOf(Props.Create(() => new DeeplyNestedPersistAsyncs(Name, nestedPersistAsyncs, TestActor)));
+            pref.Tell("a");
+            ExpectMsg("a");
+
+            var got = ReceiveN(nestedPersistAsyncs).Select(m => m.ToString()).OrderBy(m => m).ToArray();
+            got.ShouldOnlyContainInOrder(Enumerable.Range(1, nestedPersistAsyncs).Select(i => "a-" + i).ToArray());
+
+                
+            pref.Tell("b");
+            pref.Tell("c");
+            got = ReceiveN(nestedPersistAsyncs*2 + 2).Select(m => m.ToString()).OrderBy(m => m).ToArray();
+            got.ShouldOnlyContainInOrder(
+                new [] {"b"}
+                .Union(Enumerable.Range(1, nestedPersistAsyncs).Select(i => "b-" + i))
+                .Union(new [] {"c"})
+                .Union(Enumerable.Range(1, nestedPersistAsyncs).Select(i => "c-" + i))
+                .ToArray());
+        }
+
+        [Fact]
+        public void PersistentActor_should_allow_mixed_nesting_of_PersistAsync_in_Persist_calls()
+        {
+            var pref = ActorOf(Props.Create(() => new NestedPersistNormalAndAsyncs(Name, TestActor)));
+            pref.Tell("a");
+
+            ExpectMsg("a");
+            ReceiveN(4).Select(m => m.ToString()).ToArray().ShouldOnlyContainInOrder("a-outer-1", "a-outer-2", "a-inner-async-1", "a-inner-async-2");
+        }
+
+        [Fact]
+        public void PersistentActor_should_allow_mixed_nesting_of_Persist_in_PersistAsync_calls()
+        {
+            var pref = ActorOf(Props.Create(() => new NestedPersistAsyncsAndNormal(Name, TestActor)));
+            pref.Tell("a");
+
+            ExpectMsg("a");
+            ReceiveN(4).Select(m => m.ToString()).ToArray().ShouldOnlyContainInOrder("a-outer-async-1", "a-outer-async-2", "a-inner-1", "a-inner-2");
+        }
+
+        [Fact]
+        public void PersistentActor_should_make_sure_Persist_retains_promised_semantics_when_nested_in_PersistAsync_callback()
+        {
+            var pref = ActorOf(Props.Create(() => new NestedPersistInAsyncEnforcesStashing(Name, TestActor)));
+            pref.Tell("a");
+
+            ExpectMsg("a");
+            ExpectMsg("a-outer-async");
+            ExpectMsg("a-inner");
+            pref.Tell("b");
+            ExpectMsg("done");
+            // which means that b only got applied after the inner Persist() handler finished
+            // so it keeps the Persist() semantics.
+            // Even though we should not recommend this style it can come in handy I guess
+        }
+
+        [Fact]
+        public void PersistentActor_should_be_able_to_delete_events()
+        {
+            var pref = ActorOf(Props.Create(() => new BehaviorOneActor(Name)));
+            pref.Tell(new Cmd("b"));
+            pref.Tell(GetState.Instance);
+            ExpectMsgInOrder("a-1", "a-2", "b-1", "b-2");
+            pref.Tell(new Delete(2)); // delete "a-1" and "a-2"
+            pref.Tell("boom"); // restart, recover
+            ExpectMsg<DeleteMessagesSuccess>();
+            pref.Tell(GetState.Instance);
+            ExpectMsgInOrder("b-1", "b-2");
+        }
+
+        [Fact]
+        public void PersistentActor_should_be_able_to_delete_all_events()
+        {
+            var pref = ActorOf(Props.Create(() => new BehaviorOneActor(Name)));
+            pref.Tell(new Cmd("b"));
+            pref.Tell(GetState.Instance);
+            ExpectMsgInOrder("a-1", "a-2", "b-1", "b-2");
+            pref.Tell(new Delete(long.MaxValue));
+            pref.Tell("boom"); // restart, recover
+            ExpectMsg<DeleteMessagesSuccess>();
+            pref.Tell(GetState.Instance);
+            ExpectMsg<object[]>(m => m.Length == 0);
+        }
+
+        [Fact]
+        public void PersistentActor_should_brecover_the_message_which_caused_the_restart()
+        {
+            var persistentActor = ActorOf(Props.Create(() => new RecoverMessageCausedRestart(Name)));
+            persistentActor.Tell("boom");
+            ExpectMsg("failed with TestException while processing boom");
         }
     }
 }

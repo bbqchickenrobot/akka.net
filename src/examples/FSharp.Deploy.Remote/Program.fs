@@ -1,4 +1,11 @@
-﻿open Akka.FSharp
+﻿//-----------------------------------------------------------------------
+// <copyright file="Program.fs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+open Akka.FSharp
 
 // the most basic configuration of remote actor system
 let config = """
@@ -6,7 +13,7 @@ akka {
     actor {
         provider = "Akka.Remote.RemoteActorRefProvider, Akka.Remote"
     }    
-    remote.helios.tcp {
+    remote.dot-netty.tcp {
         transport-protocol = tcp
         port = 7000                 
         hostname = localhost
@@ -22,3 +29,4 @@ let main _ =
     use system = System.create "remote-system" (Configuration.parse config)
     System.Console.ReadLine() |> ignore
     0
+

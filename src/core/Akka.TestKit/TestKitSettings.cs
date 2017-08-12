@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="TestKitSettings.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using Akka.Actor;
 using Akka.Configuration;
 
@@ -15,6 +22,13 @@ namespace Akka.TestKit
         private readonly double _timefactor;
         private readonly bool _logTestKitCalls;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TestKitSettings"/> class.
+        /// </summary>
+        /// <param name="config">The configuration to use when setting up the tests.</param>
+        /// <exception cref="ConfigurationException">
+        /// This exception is thrown when a negative value is given for the <c>akka.test.timefactor</c> configuration item.
+        /// </exception>
         public TestKitSettings(Config config)
         {
             _defaultTimeout = config.GetTimeSpan("akka.test.default-timeout", allowInfinite:false);
@@ -24,7 +38,7 @@ namespace Akka.TestKit
             _logTestKitCalls = config.GetBoolean("akka.test.testkit.debug");
 
             if(_timefactor <= 0)
-                throw new Exception(@"Expected a positive value for ""akka.test.timefactor"" but found "+_timefactor);
+                throw new ConfigurationException($@"Expected a positive value for ""akka.test.timefactor"" but found {_timefactor}");
         }
 
 
@@ -57,7 +71,7 @@ namespace Akka.TestKit
 
         /// <summary>
         /// If set to <c>true</c> calls to testkit will be logged.
-        /// This is enabled by seting configuration "akka.test.testkit.debug" value to a true.
+        /// This is enabled by setting the configuration value "akka.test.testkit.debug" to a true.
         /// </summary>
         public bool LogTestKitCalls { get { return _logTestKitCalls; } }
     }

@@ -1,9 +1,19 @@
+﻿//-----------------------------------------------------------------------
+// <copyright file="IEventFilterApplier.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
 
 namespace Akka.TestKit
 {
     // ReSharper disable once InconsistentNaming
-    public interface EventFilterApplier
+    /// <summary>
+    /// TBD
+    /// </summary>
+    public interface IEventFilterApplier
     {
         /// <summary>
         /// Executes <paramref name="action"/> and
@@ -116,7 +126,7 @@ namespace Akka.TestKit
 
         /// <summary>
         /// Prevents events from being logged from now on. To allow events to be logged again, call 
-        /// <see cref="UnmutableFilter.Unmute">Unmute</see> on the returned object.
+        /// <see cref="IUnmutableFilter.Unmute"/> on the returned object.
         /// <example>
         /// <code>
         /// var filter = EventFilter.Debug().Mute();
@@ -134,8 +144,8 @@ namespace Akka.TestKit
         /// </code>
         /// </example>
         /// </summary>
-        UnmutableFilter Mute();
-
+        /// <returns>TBD</returns>
+        IUnmutableFilter Mute();
 
         /// <summary>
         /// Let's you chain more filters together. Similar to Akka JVM's filterEvents

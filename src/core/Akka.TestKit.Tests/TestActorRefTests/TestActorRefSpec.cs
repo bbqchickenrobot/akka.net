@@ -1,4 +1,11 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="TestActorRefSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
 using System.Threading;
 using Akka.Actor;
 using Akka.Configuration;
@@ -24,7 +31,7 @@ namespace Akka.TestKit.Tests.TestActorRefTests
 
         private static Config GetConfig()
         {
-            return (@"test-dispatcher1.type=""" + typeof(TaskDispatcher).FullName);
+            return (@"test-dispatcher1.type=""" + typeof(PinnedDispatcherConfigurator).FullName);
             //return (@"test-dispatcher1.type=""" + typeof(TaskDispatcher).FullName) + FullDebugConfig;
         }
 
@@ -54,7 +61,7 @@ namespace Akka.TestKit.Tests.TestActorRefTests
         {
             var a = new TestActorRef<NestingActor>(Sys, Props.Create(() => new NestingActor(true)));
             Assert.NotNull(a);
-            var nested = a.Ask<ActorRef>("any", DefaultTimeout).Result;
+            var nested = a.Ask<IActorRef>("any", DefaultTimeout).Result;
             Assert.NotNull(nested);
             Assert.NotSame(a, nested);
         }
@@ -64,7 +71,7 @@ namespace Akka.TestKit.Tests.TestActorRefTests
         {
             var a = new TestActorRef<NestingActor>(Sys, Props.Create(() => new NestingActor(false)));
             Assert.NotNull(a);
-            var nested = a.Ask<ActorRef>("any", DefaultTimeout).Result;
+            var nested = a.Ask<IActorRef>("any", DefaultTimeout).Result;
             Assert.NotNull(nested);
             Assert.NotSame(a, nested);
         }
@@ -136,11 +143,11 @@ namespace Akka.TestKit.Tests.TestActorRefTests
             Assert.Equal("Hejsan!", actor.ReceivedString);
         }
 
-        [Fact(Skip = "Context.ReceiveTimeout is not implemented. Test cannot run")]
+        [Fact]
         public void TestActorRef_must_set_ReceiveTimeout_to_None()
         {
             var a = new TestActorRef<WorkerActor>(Sys, Props.Create<WorkerActor>());
-            //TODO: When Context.ReceiveTimeout is implemented: Assert.Equal(((IInternalActor)a.UnderlyingActor).ActorContext.ReceiveTimeout, not sure what value to put here: null or Timeout.InfiniteTimeSpan);
+            ((IInternalActor)a.UnderlyingActor).ActorContext.ReceiveTimeout.ShouldBe(null);
         }
 
         [Fact]
@@ -156,7 +163,7 @@ namespace Akka.TestKit.Tests.TestActorRefTests
         {
             var a = new TestActorRef<WorkerActor>(Sys, Props.Create<WorkerActor>().WithDispatcher("test-dispatcher1"));
             var actorRef = (InternalTestActorRef)a.Ref;
-            Assert.IsType<TaskDispatcher>(actorRef.Cell.Dispatcher);
+            Assert.IsType<PinnedDispatcher>(actorRef.Cell.Dispatcher);
         }
 
         [Fact]
@@ -178,6 +185,32 @@ namespace Akka.TestKit.Tests.TestActorRefTests
             ExpectMsg("workDone");
         }
 
+        [Fact]
+        public void TestFsmActorRef_must_proxy_receive_for_underlying_actor_with_sender()
+        {
+            var a = new TestFSMRef<FsmActor, TestFsmState, string>(Sys, Props.Create(() => new FsmActor(TestActor)));
+            a.Receive("check");
+            ExpectMsg("first");
+
+            // verify that we can change state
+            a.SetState(TestFsmState.Last);
+            a.Receive("check");
+            ExpectMsg("last");
+        }
+
+        [Fact]
+        public void BugFix1709_TestFsmActorRef_must_work_with_Fsms_with_constructor_arguments()
+        {
+            var a = ActorOfAsTestFSMRef<FsmActor, TestFsmState, string>(Props.Create(() => new FsmActor(TestActor)));
+            a.Receive("check");
+            ExpectMsg("first");
+
+            // verify that we can change state
+            a.SetState(TestFsmState.Last);
+            a.Receive("check");
+            ExpectMsg("last");
+        }
+
         private class SaveStringActor : TActorBase
         {
             public string ReceivedString { get; private set; }
@@ -190,3 +223,4 @@ namespace Akka.TestKit.Tests.TestActorRefTests
         }
     }
 }
+

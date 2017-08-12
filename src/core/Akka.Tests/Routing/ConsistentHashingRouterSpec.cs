@@ -1,11 +1,19 @@
-﻿using System;
+﻿//-----------------------------------------------------------------------
+// <copyright file="ConsistentHashingRouterSpec.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
+using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Routing;
 using Akka.TestKit;
 using Xunit;
+using FluentAssertions;
 
 namespace Akka.Tests.Routing
 {
@@ -68,9 +76,9 @@ namespace Akka.Tests.Routing
 
         #endregion
 
-        private ActorRef router1;
-        private ActorRef router3;
-        private ActorRef a, b, c;
+        private readonly IActorRef _router1;
+        private readonly IActorRef _router3;
+        private IActorRef a, b, c;
 
         public ConsistentHashingRouterSpec()
             : base(@"
@@ -87,49 +95,49 @@ namespace Akka.Tests.Routing
               /router3 {
                 router = consistent-hashing-group
                 virtual-nodes-factor = 17
-                routees.paths = [""user/A"",""user/B"",""user/C""]
+                routees.paths = [""/user/A"",""/user/B"",""/user/C""]
               }
               /router4 {
                 router = consistent-hashing-group
-                routees.paths = [""user/A"",""user/B"",""user/C"", ]
+                routees.paths = [""/user/A"",""/user/B"",""/user/C"", ]
               }
         ")
         {
-            router1 = Sys.ActorOf(Props.Create<Echo>().WithRouter(FromConfig.Instance), "router1");
+            _router1 = Sys.ActorOf(Props.Create<Echo>().WithRouter(FromConfig.Instance), "router1");
             a = Sys.ActorOf(Props.Create<Echo>(), "A");
             b = Sys.ActorOf(Props.Create<Echo>(), "B");
             c = Sys.ActorOf(Props.Create<Echo>(), "C");
-            router3 = Sys.ActorOf(Props.Create<Echo>().WithRouter(FromConfig.Instance), "router3");
+            _router3 = Sys.ActorOf(Props.Create<Echo>().WithRouter(FromConfig.Instance), "router3");
         }
 
         [Fact]
-        public async Task ConsistentHashingRouterMustCreateRouteesFromConfiguration()
+        public async Task Consistent_hashing_pool_router_must_create_routees_from_configuration()
         {
-            var currentRoutees = await router1.Ask<Routees>(new GetRoutees(), GetTimeoutOrDefault(null));
-            currentRoutees.Members.Count().ShouldBe(3);
+            var currentRoutees = await _router1.Ask<Routees>(new GetRoutees(), GetTimeoutOrDefault(null));
+            currentRoutees.Members.Count().Should().Be(3);
         }
 
         [Fact]
-        public void ConsistentHashingRouterMustSelectDestinationBasedOnConsistentHashKeyOfMessage()
+        public void Consistent_hashing_pool_router_must_select_destination_based_on_consistent_hash_key_of_message()
         {
-            router1.Tell(new Msg("a", "A"));
-            var destinationA = ExpectMsg<ActorRef>();
-            router1.Tell(new ConsistentHashableEnvelope("AA", "a"));
+            _router1.Tell(new Msg("a", "A"));
+            var destinationA = ExpectMsg<IActorRef>();
+            _router1.Tell(new ConsistentHashableEnvelope("AA", "a"));
             ExpectMsg(destinationA);
 
-            router1.Tell(new Msg(17, "A"));
-            var destinationB = ExpectMsg<ActorRef>();
-            router1.Tell(new ConsistentHashableEnvelope("BB", 17));
+            _router1.Tell(new Msg(17, "A"));
+            var destinationB = ExpectMsg<IActorRef>();
+            _router1.Tell(new ConsistentHashableEnvelope("BB", 17));
             ExpectMsg(destinationB);
 
-            router1.Tell(new Msg(new MsgKey("c"), "C"));
-            var destinationC = ExpectMsg<ActorRef>();
-            router1.Tell(new ConsistentHashableEnvelope("CC", new MsgKey("c")));
+            _router1.Tell(new Msg(new MsgKey("c"), "C"));
+            var destinationC = ExpectMsg<IActorRef>();
+            _router1.Tell(new ConsistentHashableEnvelope("CC", new MsgKey("c")));
             ExpectMsg(destinationC);
         }
 
         [Fact]
-        public void ConsistentHashingRouterMustSelectDestinationWithDefinedHashMapping()
+        public void Consistent_hashing_pool_router_must_select_destination_with_defined_hash_mapping()
         {
             ConsistentHashMapping hashMapping = msg =>
             {
@@ -141,53 +149,52 @@ namespace Akka.Tests.Routing
 
                 return null;
             };
-            var router2 =
-                Sys.ActorOf(new ConsistentHashingPool(1, null, null, null, hashMapping: hashMapping).Props(Props.Create<Echo>()), "router2");
+            var router2 = Sys.ActorOf(new ConsistentHashingPool(1, hashMapping).Props(Props.Create<Echo>()), "router2");
 
             router2.Tell(new Msg2("a", "A"));
-            var destinationA = ExpectMsg<ActorRef>();
+            var destinationA = ExpectMsg<IActorRef>();
             router2.Tell(new ConsistentHashableEnvelope("AA", "a"));
             ExpectMsg(destinationA);
 
             router2.Tell(new Msg2(17, "A"));
-            var destinationB = ExpectMsg<ActorRef>();
+            var destinationB = ExpectMsg<IActorRef>();
             router2.Tell(new ConsistentHashableEnvelope("BB", 17));
             ExpectMsg(destinationB);
 
             router2.Tell(new Msg2(new MsgKey("c"), "C"));
-            var destinationC = ExpectMsg<ActorRef>();
+            var destinationC = ExpectMsg<IActorRef>();
             router2.Tell(new ConsistentHashableEnvelope("CC", new MsgKey("c")));
             ExpectMsg(destinationC);
         }
 
         [Fact]
-        public async Task ConsistentHashingGroupRouterMustCreateRouteesFromConfiguration()
+        public async Task Consistent_hashing_group_router_must_create_routees_from_configuration()
         {
-            var currentRoutees = await router3.Ask<Routees>(new GetRoutees(), GetTimeoutOrDefault(null));
+            var currentRoutees = await _router3.Ask<Routees>(new GetRoutees(), GetTimeoutOrDefault(null));
             currentRoutees.Members.Count().ShouldBe(3);
         }
 
         [Fact]
-        public void ConsistentHashingGroupRouterMustSelectDestinationBasedOnConsistentHashKeyOfMessage()
+        public void Consistent_hashing_group_router_must_select_destination_based_on_consistent_hash_key_of_message()
         {
-            router3.Tell(new Msg("a", "A"));
-            var destinationA = ExpectMsg<ActorRef>();
-            router3.Tell(new ConsistentHashableEnvelope("AA", "a"));
+            _router3.Tell(new Msg("a", "A"));
+            var destinationA = ExpectMsg<IActorRef>();
+            _router3.Tell(new ConsistentHashableEnvelope("AA", "a"));
             ExpectMsg(destinationA);
 
-            router3.Tell(new Msg(17, "A"));
-            var destinationB = ExpectMsg<ActorRef>();
-            router3.Tell(new ConsistentHashableEnvelope("BB", 17));
+            _router3.Tell(new Msg(17, "A"));
+            var destinationB = ExpectMsg<IActorRef>();
+            _router3.Tell(new ConsistentHashableEnvelope("BB", 17));
             ExpectMsg(destinationB);
 
-            router3.Tell(new Msg(new MsgKey("c"), "C"));
-            var destinationC = ExpectMsg<ActorRef>();
-            router3.Tell(new ConsistentHashableEnvelope("CC", new MsgKey("c")));
+            _router3.Tell(new Msg(new MsgKey("c"), "C"));
+            var destinationC = ExpectMsg<IActorRef>();
+            _router3.Tell(new ConsistentHashableEnvelope("CC", new MsgKey("c")));
             ExpectMsg(destinationC);
         }
 
         [Fact]
-        public void ConsistentHashingGroupRouterMustSelectDestinationWithDefinedHashMapping()
+        public void Consistent_hashing_group_router_must_select_destination_with_defined_hash_mapping()
         {
             ConsistentHashMapping hashMapping = msg =>
             {
@@ -199,52 +206,24 @@ namespace Akka.Tests.Routing
 
                 return null;
             };
-            var router4 =
-                Sys.ActorOf(Props.Empty.WithRouter(new ConsistentHashingGroup(new[]{c},hashMapping: hashMapping)), "router4");
+
+            var paths = new List<string> { c.Path.ToString() };
+            var router4 = Sys.ActorOf(new ConsistentHashingGroup(paths, hashMapping).Props(), "router4");
 
             router4.Tell(new Msg2("a", "A"));
-            var destinationA = ExpectMsg<ActorRef>();
+            var destinationA = ExpectMsg<IActorRef>();
             router4.Tell(new ConsistentHashableEnvelope("AA", "a"));
             ExpectMsg(destinationA);
 
             router4.Tell(new Msg2(17, "A"));
-            var destinationB = ExpectMsg<ActorRef>();
+            var destinationB = ExpectMsg<IActorRef>();
             router4.Tell(new ConsistentHashableEnvelope("BB", 17));
             ExpectMsg(destinationB);
 
             router4.Tell(new Msg2(new MsgKey("c"), "C"));
-            var destinationC = ExpectMsg<ActorRef>();
+            var destinationC = ExpectMsg<IActorRef>();
             router4.Tell(new ConsistentHashableEnvelope("CC", new MsgKey("c")));
             ExpectMsg(destinationC);
-        }
-
-        [Fact]
-        public async Task ConsistentHashingRouterMustAdjustNodeRingWhenRouteeDies()
-        {
-            //create pool router with two routees
-            var router5 =
-                Sys.ActorOf(Props.Create<Echo>().WithRouter(new ConsistentHashingPool(2, null, null, null)), "router5");
-
-            //verify that we have at least 2 routees
-            var currentRoutees = await router5.Ask<Routees>(new GetRoutees(), GetTimeoutOrDefault(null));
-            currentRoutees.Members.Count().ShouldBe(2);
-
-            router5.Tell(new Msg("a", "A"), TestActor);
-            var actorWhoDies = ExpectMsg<ActorRef>();
-
-            //kill off the actor
-            actorWhoDies.Tell(PoisonPill.Instance);
-
-            //might take some time for the deathwatch to get processed
-            AwaitAssert(() =>
-            {
-                router5.Tell(new Msg("a", "A"), TestActor);
-                //verify that a different actor now owns this hash range
-                var actorWhoDidntDie = ExpectMsg<ActorRef>(TimeSpan.FromMilliseconds(50));
-                actorWhoDidntDie.ShouldNotBe(actorWhoDies);
-            }, TimeSpan.FromSeconds(5));
-
-            
         }
     }
 }

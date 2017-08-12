@@ -1,153 +1,181 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿//-----------------------------------------------------------------------
+// <copyright file="Serializer.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
+using System;
+using System.Linq;
+using System.Reflection;
 using Akka.Actor;
-using Newtonsoft.Json;
+using Akka.Util;
 
 namespace Akka.Serialization
 {
-    /**
-     * A Serializer represents a bimap between an object and an array of bytes representing that object.
-     *
-     * Serializers are loaded using reflection during [[akka.actor.ActorSystem]]
-     * start-up, where two constructors are tried in order:
-     *
-     * <ul>
-     * <li>taking exactly one argument of type [[akka.actor.ExtendedActorSystem]];
-     * this should be the preferred one because all reflective loading of classes
-     * during deserialization should use ExtendedActorSystem.dynamicAccess (see
-     * [[akka.actor.DynamicAccess]]), and</li>
-     * <li>without arguments, which is only an option if the serializer does not
-     * load classes using reflection.</li>
-     * </ul>
-     *
-     * <b>Be sure to always use the PropertyManager for loading classes!</b> This is necessary to
-     * avoid strange match errors and inequalities which arise from different class loaders loading
-     * the same class.
-     */
-
     /// <summary>
-    ///     Class Serializer.
+    /// A Serializer represents a bimap between an object and an array of bytes representing that object.
+    ///
+    /// Serializers are loaded using reflection during <see cref="ActorSystem"/>
+    /// start-up, where two constructors are tried in order:
+    ///
+    /// <ul>
+    /// <li>taking exactly one argument of type <see cref="ExtendedActorSystem"/>;
+    /// this should be the preferred one because all reflective loading of classes
+    /// during deserialization should use ExtendedActorSystem.dynamicAccess (see
+    /// [[akka.actor.DynamicAccess]]), and</li>
+    /// <li>without arguments, which is only an option if the serializer does not
+    /// load classes using reflection.</li>
+    /// </ul>
+    ///
+    /// <b>Be sure to always use the PropertyManager for loading classes!</b> This is necessary to
+    /// avoid strange match errors and inequalities which arise from different class loaders loading
+    /// the same class.
     /// </summary>
     public abstract class Serializer
     {
         /// <summary>
-        ///     The system
+        /// The actor system to associate with this serializer.
         /// </summary>
         protected readonly ExtendedActorSystem system;
 
+        private readonly FastLazy<int> _value;
+
         /// <summary>
-        ///     Initializes a new instance of the <see cref="Serializer" /> class.
+        /// Initializes a new instance of the <see cref="Serializer" /> class.
         /// </summary>
-        /// <param name="system">The system.</param>
-        public Serializer(ExtendedActorSystem system)
+        /// <param name="system">The actor system to associate with this serializer. </param>
+        protected Serializer(ExtendedActorSystem system)
         {
             this.system = system;
+            _value = new FastLazy<int>(() => SerializerIdentifierHelper.GetSerializerIdentifierFromConfig(GetType(), system));
         }
 
-        /**
-         * Completely unique value to identify this implementation of Serializer, used to optimize network traffic
-         * Values from 0 to 16 is reserved for Akka internal usage
-         */
+        /// <summary>
+        /// Completely unique value to identify this implementation of Serializer, used to optimize network traffic
+        /// Values from 0 to 16 is reserved for Akka internal usage
+        /// </summary>
+        public virtual int Identifier => _value.Value;
 
         /// <summary>
-        ///     Gets the identifier.
+        /// Returns whether this serializer needs a manifest in the fromBinary method
         /// </summary>
-        /// <value>The identifier.</value>
-        public abstract int Identifier { get; }
-
-        /**
-         * Returns whether this serializer needs a manifest in the fromBinary method
-         */
-
-        /// <summary>
-        ///     Gets a value indicating whether [include manifest].
-        /// </summary>
-        /// <value><c>true</c> if [include manifest]; otherwise, <c>false</c>.</value>
         public abstract bool IncludeManifest { get; }
 
-        /**
-         * Serializes the given object into an Array of Byte
-         */
-
         /// <summary>
-        ///     To the binary.
+        /// Serializes the given object into a byte array
         /// </summary>
-        /// <param name="obj">The object.</param>
-        /// <returns>System.Byte[][].</returns>
+        /// <param name="obj">The object to serialize </param>
+        /// <returns>A byte array containing the serialized object</returns>
         public abstract byte[] ToBinary(object obj);
 
-        /**
-         * Produces an object from an array of bytes, with an optional type;
-         */
+        /// <summary>
+        /// Serializes the given object into a byte array and uses the given address to decorate serialized ActorRef's
+        /// </summary>
+        /// <param name="address">The address to use when serializing local ActorRef´s</param>
+        /// <param name="obj">The object to serialize</param>
+        /// <returns>TBD</returns>
+        public byte[] ToBinaryWithAddress(Address address, object obj)
+        {
+            return Serialization.SerializeWithTransport(system, address, () => ToBinary(obj));
+        }
 
         /// <summary>
-        ///     Froms the binary.
+        /// Deserializes a byte array into an object of type <paramref name="type"/>.
         /// </summary>
-        /// <param name="bytes">The bytes.</param>
-        /// <param name="type">The type.</param>
-        /// <returns>System.Object.</returns>
+        /// <param name="bytes">The array containing the serialized object</param>
+        /// <param name="type">The type of object contained in the array</param>
+        /// <returns>The object contained in the array</returns>
         public abstract object FromBinary(byte[] bytes, Type type);
+
+        /// <summary>
+        /// Deserializes a byte array into an object.
+        /// </summary>
+        /// <param name="bytes">The array containing the serialized object</param>
+        /// <returns>The object contained in the array</returns>
+        public T FromBinary<T>(byte[] bytes) => (T)FromBinary(bytes, typeof(T));
     }
 
     /// <summary>
-    ///     Class JavaSerializer.
+    /// TBD
     /// </summary>
-    public class JavaSerializer : Serializer
+    public abstract class SerializerWithStringManifest : Serializer
     {
         /// <summary>
-        ///     Initializes a new instance of the <see cref="JavaSerializer" /> class.
+        /// Initializes a new instance of the <see cref="SerializerWithStringManifest"/> class.
         /// </summary>
-        /// <param name="system">The system.</param>
-        public JavaSerializer(ExtendedActorSystem system) : base(system)
+        /// <param name="system">The actor system to associate with this serializer.</param>
+        protected SerializerWithStringManifest(ExtendedActorSystem system) : base(system)
         {
         }
 
         /// <summary>
-        ///     Gets the identifier.
-        /// </summary>
-        /// <value>The identifier.</value>
-        /// Completely unique value to identify this implementation of Serializer, used to optimize network traffic
-        /// Values from 0 to 16 is reserved for Akka internal usage
-        public override int Identifier
-        {
-            get { return 1; }
-        }
-
-        /// <summary>
-        ///     Gets a value indicating whether [include manifest].
-        /// </summary>
-        /// <value><c>true</c> if [include manifest]; otherwise, <c>false</c>.</value>
-        /// <exception cref="System.NotSupportedException"></exception>
         /// Returns whether this serializer needs a manifest in the fromBinary method
-        public override bool IncludeManifest
+        /// </summary>
+        public sealed override bool IncludeManifest => true;
+
+        /// <summary>
+        /// Deserializes a byte array into an object of type <paramref name="type" />.
+        /// </summary>
+        /// <param name="bytes">The array containing the serialized object</param>
+        /// <param name="type">The type of object contained in the array</param>
+        /// <returns>The object contained in the array</returns>
+        public sealed override object FromBinary(byte[] bytes, Type type)
         {
-            get { throw new NotSupportedException(); }
+            var manifest = type.TypeQualifiedName();
+            return FromBinary(bytes, manifest);
         }
 
         /// <summary>
-        ///     To the binary.
+        /// Deserializes a byte array into an object using an optional <paramref name="manifest"/> (type hint).
         /// </summary>
-        /// <param name="obj">The object.</param>
-        /// <returns>System.Byte[][].</returns>
-        /// <exception cref="System.NotSupportedException"></exception>
-        /// Serializes the given object into an Array of Byte
-        public override byte[] ToBinary(object obj)
-        {
-            throw new NotSupportedException();
-        }
+        /// <param name="bytes">The array containing the serialized object</param>
+        /// <param name="manifest">The type hint used to deserialize the object contained in the array.</param>
+        /// <returns>The object contained in the array</returns>
+        public abstract object FromBinary(byte[] bytes, string manifest);
 
         /// <summary>
-        ///     Froms the binary.
+        /// Returns the manifest (type hint) that will be provided in the <see cref="FromBinary(byte[],System.Type)"/> method.
+        /// 
+        /// <note>
+        /// This method returns <see cref="String.Empty"/> if a manifest is not needed.
+        /// </note>
         /// </summary>
-        /// <param name="bytes">The bytes.</param>
-        /// <param name="type">The type.</param>
-        /// <returns>System.Object.</returns>
-        /// <exception cref="System.NotSupportedException"></exception>
-        /// Produces an object from an array of bytes, with an optional type;
-        public override object FromBinary(byte[] bytes, Type type)
+        /// <param name="o">The object for which the manifest is needed.</param>
+        /// <returns>The manifest needed for the deserialization of the specified <paramref name="o"/>.</returns>
+        public abstract string Manifest(object o);
+    }
+
+    /// <summary>
+    /// INTERNAL API.
+    /// </summary>
+    internal static class SerializerIdentifierHelper
+    {
+        /// <summary>
+        /// TBD
+        /// </summary>
+        public const string SerializationIdentifiers = "akka.actor.serialization-identifiers";
+
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="type">TBD</param>
+        /// <param name="system">TBD</param>
+        /// <exception cref="ArgumentException">
+        /// This exception is thrown if the system couldn't find the given serializer <paramref name="type"/> id in the configuration.
+        /// </exception>
+        /// <returns>TBD</returns>
+        public static int GetSerializerIdentifierFromConfig(Type type, ExtendedActorSystem system)
         {
-            throw new NotSupportedException();
+            var config = system.Settings.Config.GetConfig(SerializationIdentifiers);
+            var identifiers = config.AsEnumerable()
+                .ToDictionary(pair => Type.GetType(pair.Key, true), pair => pair.Value.GetInt());
+
+            if (!identifiers.TryGetValue(type, out int value))
+                throw new ArgumentException($"Couldn't find serializer id for [{type}] under [{SerializationIdentifiers}] HOCON path", nameof(type));
+
+            return value;
         }
     }
 }
+

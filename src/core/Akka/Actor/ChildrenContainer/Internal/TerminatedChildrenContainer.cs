@@ -1,3 +1,10 @@
+﻿//-----------------------------------------------------------------------
+// <copyright file="TerminatedChildrenContainer.cs" company="Akka.NET Project">
+//     Copyright (C) 2009-2016 Lightbend Inc. <http://www.lightbend.com>
+//     Copyright (C) 2013-2016 Akka.NET project <https://github.com/akkadotnet/akka.net>
+// </copyright>
+//-----------------------------------------------------------------------
+
 using System;
 
 namespace Akka.Actor.Internal
@@ -9,31 +16,57 @@ namespace Akka.Actor.Internal
     /// </summary>
     public class TerminatedChildrenContainer : EmptyChildrenContainer
     {
-        private static readonly ChildrenContainer _instance = new TerminatedChildrenContainer();
+        private static readonly IChildrenContainer _instance = new TerminatedChildrenContainer();
 
         private TerminatedChildrenContainer()
         {
             //Intentionally left blank
         }
-        public new static ChildrenContainer Instance { get { return _instance; } }
+        /// <summary>
+        /// TBD
+        /// </summary>
+        public new static IChildrenContainer Instance { get { return _instance; } }
 
-        public override ChildrenContainer Add(string name, ChildRestartStats stats)
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <param name="name">TBD</param>
+        /// <param name="stats">TBD</param>
+        /// <returns>TBD</returns>
+        public override IChildrenContainer Add(string name, ChildRestartStats stats)
         {
             return this;
         }
 
-        public override ChildrenContainer Reserve(string name)
+        /// <summary>
+        /// N/A
+        /// </summary>
+        /// <param name="name">N/A</param>
+        /// <returns>N/A</returns>
+        /// <exception cref="InvalidOperationException">This exception is automatically thrown since the name belongs to an actor that is already terminated.</exception>
+        public override IChildrenContainer Reserve(string name)
         {
-            throw new InvalidOperationException("Cannot reserve actor name '" + name + "': already terminated");
+            throw new InvalidOperationException($"Cannot reserve actor name '{name}': already terminated");
         }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public override bool IsTerminating { get { return true; } }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
         public override bool IsNormal { get { return false; } }
 
+        /// <summary>
+        /// TBD
+        /// </summary>
+        /// <returns>TBD</returns>
         public override string ToString()
         {
             return "Terminated";
         }
     }
 }
+
